@@ -121,7 +121,7 @@ fun FullPlayerScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(RoundedCornerShape(20.dp))
-                        .shadow(24.dp, RoundedCornerShape(20.dp), PrimaryDark.copy(alpha = 0.2f), PrimaryDark.copy(alpha = 0.3f))
+                        .shadow(24.dp, RoundedCornerShape(20.dp), ambientColor = PrimaryDark.copy(alpha = 0.2f), spotColor = PrimaryDark.copy(alpha = 0.3f))
                 )
             } else {
                 Box(
