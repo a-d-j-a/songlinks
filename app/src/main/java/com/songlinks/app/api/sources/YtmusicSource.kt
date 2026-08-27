@@ -1,6 +1,8 @@
 package com.songlinks.app.api.sources
 
 import android.util.Log
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
 import com.google.gson.JsonParser
 import com.songlinks.app.api.SongResult
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +42,20 @@ object YtmusicSource {
 
     private fun jsonEscape(s: String): String {
         return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+    }
+
+    private fun getRuns(flexColumn: JsonElement?): JsonArray? {
+        val obj = flexColumn?.asJsonObject?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer") ?: return null
+        return obj.getAsJsonObject("text")?.getAsJsonArray("runs") ?: obj.getAsJsonArray("runs")
+    }
+
+    private fun getPageType(run: JsonElement): String? {
+        return run.asJsonObject
+            ?.getAsJsonObject("navigationEndpoint")
+            ?.getAsJsonObject("browseEndpoint")
+            ?.getAsJsonObject("browseEndpointContextSupportedConfigs")
+            ?.getAsJsonObject("browseEndpointContextMusicConfig")
+            ?.get("pageType")?.asString
     }
 
     private fun searchWithParams(query: String, limit: Int, params: String): List<SongResult> {
@@ -84,50 +100,105 @@ object YtmusicSource {
         val songs = mutableListOf<SongResult>()
         for (item in allItems) {
             val columns = item.getAsJsonArray("flexColumns") ?: continue
+            if (columns.size() == 0) continue
 
-            val videoId = columns[0].asJsonObject
-                ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                ?.getAsJsonArray("runs")
-                ?.mapNotNull { it.asJsonObject }
-                ?.firstOrNull { r ->
-                    r.getAsJsonObject("navigationEndpoint")?.has("watchEndpoint") == true
-                }
+            // Title + videoId from first column (handles both text.runs and runs)
+            val runs0 = getRuns(columns[0])
+            val title = runs0?.joinToString("") { it.asJsonObject.get("text")?.asString ?: "" } ?: ""
+            if (title.isBlank()) continue
+
+            val videoId = runs0?.mapNotNull { it.asJsonObject }
+                ?.firstOrNull { it.getAsJsonObject("navigationEndpoint")?.has("watchEndpoint") == true }
                 ?.getAsJsonObject("navigationEndpoint")
                 ?.getAsJsonObject("watchEndpoint")
                 ?.get("videoId")?.asString ?: ""
 
             if (videoId.isBlank()) continue
 
-            val titleRuns = columns[0].asJsonObject
-                ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                ?.getAsJsonArray("runs")
-            val title = titleRuns
-                ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
+            // Second column contains artists, album, duration interleaved with " • " separators in text.runs
+            // Parse robustly: artist = pageType ARTIST, album = pageType ALBUM, duration = \d+:\d+ pattern
+            var artist = ""
+            var album = ""
+            var durationSec = 0
 
-            if (title.isBlank()) continue
+            if (columns.size() > 1) {
+                val runs1 = getRuns(columns[1])
+                if (runs1 != null) {
+                    val artistParts = mutableListOf<String>()
+                    val albumParts = mutableListOf<String>()
+                    var durationText = ""
+                    for (elem in runs1) {
+                        val obj = elem.asJsonObject
+                        val text = obj.get("text")?.asString ?: ""
+                        if (text == " • " || text == " & " || text.isBlank()) continue
+                        val pageType = getPageType(elem)
+                        when (pageType) {
+                            "MUSIC_PAGE_TYPE_ARTIST" -> artistParts.add(text)
+                            "MUSIC_PAGE_TYPE_ALBUM" -> albumParts.add(text)
+                            else -> {
+                                // Check if it's duration (e.g., "6:56" or "3:12")
+                                if (text.matches(Regex("\\d+:\\d+(:\\d+)?"))) {
+                                    durationText = text
+                                } else if (artistParts.isEmpty() && albumParts.isEmpty()) {
+                                    // Fallback: if no pageType, first non-duration is likely artist (handles older layout where column split)
+                                    // But for new layout, runs without pageType that aren't duration are separators, so skip
+                                }
+                            }
+                        }
+                    }
+                    // Fallback for older layout where artist was separate column without pageType handling
+                    if (artistParts.isEmpty()) {
+                        // Try to get artist as all non-album, non-duration text joined
+                        val fallbackArtist = runs1
+                            .filter { elem ->
+                                val t = elem.asJsonObject.get("text")?.asString ?: ""
+                                t != " • " && !t.matches(Regex("\\d+:\\d+.*")) && getPageType(elem) != "MUSIC_PAGE_TYPE_ALBUM"
+                            }
+                            .joinToString("") { it.asJsonObject.get("text")?.asString ?: "" }
+                            .split(" • ")[0].trim()
+                        if (fallbackArtist.isNotEmpty() && !fallbackArtist.contains(":") ) {
+                            artist = fallbackArtist
+                        } else {
+                            artist = artistParts.joinToString(", ")
+                        }
+                    } else {
+                        artist = artistParts.joinToString(", ")
+                    }
+                    album = albumParts.joinToString("")
+                    if (durationText.isNotBlank()) durationSec = parseDuration(durationText)
+                    // If still no duration, try last column
+                    if (durationSec == 0 && columns.size() > 2) {
+                        val lastRuns = getRuns(columns[columns.size() - 1])
+                        val lastText = lastRuns?.lastOrNull()?.asJsonObject?.get("text")?.asString ?: ""
+                        if (lastText.matches(Regex("\\d+:\\d+.*"))) durationSec = parseDuration(lastText)
+                        // Also if duration still 0, maybe duration is in column 1's last run
+                        if (durationSec == 0 && durationText.isBlank()) {
+                            val maybeDur = lastRuns?.joinToString("") { it.asJsonObject.get("text")?.asString ?: "" } ?: ""
+                            if (maybeDur.contains(":")) durationSec = parseDuration(maybeDur.split(" • ").last().trim())
+                        }
+                    }
+                    // Final fallback: if we have durationText from earlier, use it
+                    if (durationSec == 0 && durationText.isNotBlank()) durationSec = parseDuration(durationText)
+                }
+            }
 
-            val artistRuns = if (columns.size() > 1)
-                columns[1].asJsonObject
-                    ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                    ?.getAsJsonArray("runs")
-            else null
-            val artist = artistRuns
-                ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
+            // Fallback for older API where album in column 2
+            if (album.isBlank() && columns.size() > 2) {
+                val albumRuns = getRuns(columns[2])
+                if (albumRuns != null) {
+                    val a = albumRuns.joinToString("") { it.asJsonObject.get("text")?.asString ?: "" }
+                    if (a.isNotBlank() && !a.matches(Regex("\\d+:\\d+.*"))) album = a
+                }
+            }
 
-            val albumRuns = if (columns.size() > 2)
-                columns[2].asJsonObject
-                    ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                    ?.getAsJsonArray("runs")
-            else null
-            val album = albumRuns
-                ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
-
-            val durationText = columns.lastOrNull()?.asJsonObject
-                ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                ?.getAsJsonArray("runs")
-                ?.firstOrNull()?.asJsonObject
-                ?.get("text")?.asString ?: "0:00"
-            val durationSec = parseDuration(durationText)
+            // Duration fallback if still 0 and we have 3 columns
+            if (durationSec == 0) {
+                val durRuns = getRuns(columns[columns.size() - 1])
+                val durText = durRuns?.joinToString("") { it.asJsonObject.get("text")?.asString ?: "" } ?: ""
+                // Extract last "M:SS" pattern
+                val match = Regex("""(\d+:\d+(?::\d+)?)""").find(durText)
+                if (match != null) durationSec = parseDuration(match.value)
+            }
 
             val thumbnails = item.getAsJsonObject("thumbnail")
                 ?.getAsJsonObject("musicThumbnailRenderer")
@@ -252,7 +323,8 @@ object YtmusicSource {
     }
 
     private fun parseDuration(text: String): Int {
-        val parts = text.split(":").map { it.toIntOrNull() ?: 0 }
+        val clean = text.trim().split(" • ").last().trim()
+        val parts = clean.split(":").map { it.toIntOrNull() ?: 0 }
         return when (parts.size) {
             2 -> parts[0] * 60 + parts[1]
             3 -> parts[0] * 3600 + parts[1] * 60 + parts[2]

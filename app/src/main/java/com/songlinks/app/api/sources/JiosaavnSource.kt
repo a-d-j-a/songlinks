@@ -91,10 +91,11 @@ object JiosaavnSource {
                                 val obj = element.asJsonObject
                                 val songId = obj.get("id")?.asString ?: obj.get("songid")?.asString ?: continue
                                 val title = obj.get("song")?.asString ?: obj.get("title")?.asString ?: continue
-                                val artist = obj.get("singers")?.asString ?: obj.get("music")?.asString ?: ""
+                                val moreInfo = obj.getAsJsonObject("more_info")
+                                val artist = obj.get("singers")?.asString ?: moreInfo?.get("singers")?.asString ?: obj.get("music")?.asString ?: moreInfo?.get("primary_artists")?.asString ?: ""
                                 val album = obj.get("album")?.asString ?: ""
-                                val duration = obj.get("duration")?.asString?.toIntOrNull() ?: 0
-                                val permaUrl = obj.get("perma_url")?.asString ?: ""
+                                val duration = obj.get("duration")?.asString?.toIntOrNull() ?: moreInfo?.get("duration")?.asString?.toIntOrNull() ?: 0
+                                val permaUrl = obj.get("perma_url")?.asString ?: obj.get("url")?.asString ?: ""
 
                                 val coverRaw = obj.get("image")?.asString ?: ""
                                 var coverUrl = ""
@@ -119,6 +120,14 @@ object JiosaavnSource {
                                     if (decrypted.isNotBlank() && decrypted.startsWith("http")) {
                                         streamUrl = decrypted
                                         quality = "320kbps"
+                                    }
+                                }
+                                // Fallback to preview vlink (30s preview) for autocomplete results which lack encrypted_media_url
+                                if (streamUrl.isBlank()) {
+                                    val vlink = moreInfo?.get("vlink")?.asString ?: ""
+                                    if (vlink.isNotBlank() && vlink.startsWith("http")) {
+                                        streamUrl = vlink
+                                        quality = "preview"
                                     }
                                 }
 
