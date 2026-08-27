@@ -383,8 +383,7 @@ class PlayerService : LifecycleService() {
             )
             .addAction(android.R.drawable.ic_media_next, "Next", nextPendingIntent)
             .setStyle(
-                androidx.media.app.NotificationCompat.MediaStyle()
-                    .setMediaSession(mediaSession?.sessionToken)
+                NotificationCompat.MediaStyle()
                     .setShowActionsInCompactView(0, 1, 2)
             )
             .build()
@@ -466,7 +465,7 @@ class PlayerService : LifecycleService() {
         val numBands = eq.numberOfBands.toInt()
         val bands = mutableListOf<Pair<Int, Short>>()
         for (i in 0 until numBands) {
-            val freq = eq.bandFreq[i]
+            val freq = eq.getBandFreq(i.toShort()).toInt()
             val level = eq.getBandLevel(i.toShort())
             bands.add(freq to level)
         }
