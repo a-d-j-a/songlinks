@@ -2,6 +2,7 @@ package com.songlinks.app.ui.screens.search
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -289,10 +290,7 @@ private fun SearchResultCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(ThemeCard)
-            .then(
-                Modifier.background(ThemeCard)
-            ),
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = ThemeCard),
         border = BorderStroke(1.dp, CardBorder)
