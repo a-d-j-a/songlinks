@@ -23,7 +23,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
+import android.util.Log
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -48,6 +50,8 @@ fun MiniPlayer(
     onNavigateToFullPlayer: () -> Unit,
     playerService: PlayerService?
 ) {
+    LaunchedEffect(Unit) { Log.d("MiniPlayer", "Composing") }
+
     val currentSong by PlayerState.currentSong.collectAsState()
     val isPlaying by PlayerState.isPlaying.collectAsState()
     val position by PlayerState.position.collectAsState()

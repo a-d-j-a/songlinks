@@ -44,7 +44,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberSwipeToDismissBoxState
+import android.util.Log
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -80,6 +82,8 @@ fun PlaylistsScreen(
     onBack: (() -> Unit)? = null,
     viewModel: PlaylistsViewModel = viewModel()
 ) {
+    LaunchedEffect(Unit) { Log.d("PlaylistsScreen", "Composing") }
+
     val playlists by viewModel.playlists.collectAsState()
     val selectedPlaylist by viewModel.selectedPlaylist.collectAsState()
     val playlistSongs by viewModel.playlistSongs.collectAsState()

@@ -2,6 +2,7 @@ package com.songlinks.app.ui.screens.settings
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.songlinks.app.api.SongApi
@@ -9,6 +10,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+private const val TAG = "SettingsViewModel"
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -54,12 +57,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val lastBackupDate: StateFlow<Long> = _lastBackupDate.asStateFlow()
 
     fun updateServerUrl(url: String) {
+        Log.d(TAG, "updateServerUrl: $url")
         _serverUrl.value = url
         prefs.edit().putString("server_url", url).apply()
     }
 
     fun toggleTheme() {
         _isDarkTheme.value = !_isDarkTheme.value
+        Log.d(TAG, "toggleTheme: ${_isDarkTheme.value}")
         prefs.edit().putBoolean("dark_theme", _isDarkTheme.value).apply()
     }
 
@@ -89,12 +94,26 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun exportBackup() {
+        Log.d(TAG, "exportBackup: saving local data to SharedPreferences backup")
         viewModelScope.launch {
             try {
-                val backupData = api.getBackupData()
-                _lastBackupDate.value = backupData.timestamp
-                prefs.edit().putLong("last_backup_date", backupData.timestamp).apply()
-            } catch (_: Exception) {
+                val backupMap = mapOf(
+                    "play_history" to (prefs.getString("play_history", "") ?: ""),
+                    "recent_searches" to (prefs.getStringSet("recent_searches", emptySet())?.joinToString("|") ?: ""),
+                    "server_url" to (_serverUrl.value),
+                    "audio_quality" to (_audioQuality.value),
+                    "crossfade_enabled" to (_crossfadeEnabled.value),
+                    "crossfade_duration" to (_crossfadeDuration.value),
+                    "download_quality" to (_downloadQuality.value),
+                    "download_wifi_only" to (_downloadWifiOnly.value)
+                )
+                val json = com.google.gson.Gson().toJson(backupMap)
+                prefs.edit().putString("local_backup", json).apply()
+                _lastBackupDate.value = System.currentTimeMillis()
+                prefs.edit().putLong("last_backup_date", _lastBackupDate.value).apply()
+                Log.d(TAG, "exportBackup: success, timestamp=${_lastBackupDate.value}")
+            } catch (e: Exception) {
+                Log.e(TAG, "exportBackup failed", e)
                 _lastBackupDate.value = System.currentTimeMillis()
                 prefs.edit().putLong("last_backup_date", _lastBackupDate.value).apply()
             }
@@ -102,18 +121,40 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun importBackup() {
+        Log.d(TAG, "importBackup: restoring from local backup")
         viewModelScope.launch {
             try {
-                val backupData = api.getBackupData()
-                api.restoreBackup(backupData)
-                _lastBackupDate.value = System.currentTimeMillis()
-                prefs.edit().putLong("last_backup_date", _lastBackupDate.value).apply()
-            } catch (_: Exception) {
+                val json = prefs.getString("local_backup", null)
+                if (json != null) {
+                    val type = object : com.google.gson.reflect.TypeToken<Map<String, String>>() {}.type
+                    val backupMap: Map<String, String> = com.google.gson.Gson().fromJson(json, type)
+                    val editor = prefs.edit()
+                    backupMap["play_history"]?.let { editor.putString("play_history", it) }
+                    backupMap["server_url"]?.let { editor.putString("server_url", it); _serverUrl.value = it }
+                    backupMap["audio_quality"]?.let { editor.putString("audio_quality", it); _audioQuality.value = it }
+                    backupMap["crossfade_enabled"]?.let { editor.putBoolean("crossfade_enabled", it.toBoolean()); _crossfadeEnabled.value = it.toBoolean() }
+                    backupMap["crossfade_duration"]?.let { editor.putFloat("crossfade_duration", it.toFloat()); _crossfadeDuration.value = it.toFloat() }
+                    backupMap["download_quality"]?.let { editor.putString("download_quality", it); _downloadQuality.value = it }
+                    backupMap["download_wifi_only"]?.let { editor.putBoolean("download_wifi_only", it.toBoolean()); _downloadWifiOnly.value = it.toBoolean() }
+                    backupMap["recent_searches"]?.let { recent ->
+                        val set = recent.split("|").filter { it.isNotBlank() }.toSet()
+                        editor.putStringSet("recent_searches", set)
+                    }
+                    editor.apply()
+                    _lastBackupDate.value = System.currentTimeMillis()
+                    prefs.edit().putLong("last_backup_date", _lastBackupDate.value).apply()
+                    Log.d(TAG, "importBackup: success, restored ${backupMap.size} keys")
+                } else {
+                    Log.w(TAG, "importBackup: no local backup found")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "importBackup failed", e)
             }
         }
     }
 
     fun testConnection() {
+        Log.d(TAG, "testConnection")
         viewModelScope.launch {
             _isTestingConnection.value = true
             _connectionResult.value = null
@@ -137,6 +178,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun clearAllData() {
+        Log.d(TAG, "clearAllData")
         prefs.edit().clear().apply()
         _serverUrl.value = "http://10.0.2.2:3000"
         _isDarkTheme.value = true

@@ -1,6 +1,7 @@
 package com.songlinks.app.ui.screens.lyrics
 
 import android.app.Application
+import android.util.Log
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -16,6 +17,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
+
+private const val TAG = "LyricsViewModel"
 
 class LyricsViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -45,9 +48,11 @@ class LyricsViewModel(application: Application) : AndroidViewModel(application) 
     val hasSyncedLyrics: StateFlow<Boolean> = _hasSyncedLyrics.asStateFlow()
 
     init {
+        Log.d(TAG, "init")
     }
 
     fun fetchLyrics(title: String, artist: String) {
+        Log.d(TAG, "fetchLyrics: title=$title, artist=$artist")
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
@@ -108,6 +113,7 @@ class LyricsViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun updateCurrentPosition(positionMs: Long) {
+        Log.d(TAG, "updateCurrentPosition: $positionMs")
         val lines = _syncedLines.value
         if (lines.isEmpty()) return
 

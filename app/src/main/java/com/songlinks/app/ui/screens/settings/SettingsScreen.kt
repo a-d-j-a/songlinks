@@ -87,7 +87,8 @@ import java.util.concurrent.TimeUnit
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    viewModel: SettingsViewModel = viewModel()
+    viewModel: SettingsViewModel = viewModel(),
+    playerService: com.songlinks.app.player.PlayerService? = null
 ) {
     val serverUrl by viewModel.serverUrl.collectAsState()
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
@@ -99,11 +100,11 @@ fun SettingsScreen(
     val downloadQuality by viewModel.downloadQuality.collectAsState()
     val downloadWifiOnly by viewModel.downloadWifiOnly.collectAsState()
     val lastBackupDate by viewModel.lastBackupDate.collectAsState()
+    val sleepTimerRemaining by com.songlinks.app.data.local.PlayerState.sleepTimerRemaining.collectAsState()
 
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var showClearAllDialog by remember { mutableStateOf(false) }
     var sleepTimerMinutes by remember { mutableLongStateOf(0L) }
-    var sleepTimerEndMs by remember { mutableLongStateOf(0L) }
     val scope = rememberCoroutineScope()
 
     LazyColumn(
@@ -458,8 +459,8 @@ fun SettingsScreen(
 
         item {
             SettingsSection(title = "SLEEP TIMER") {
-                val isActive = sleepTimerEndMs > System.currentTimeMillis()
-                val remainingMs = (sleepTimerEndMs - System.currentTimeMillis()).coerceAtLeast(0)
+                val isActive = sleepTimerRemaining > 0L
+                val remainingMs = sleepTimerRemaining
                 val remainingMin = TimeUnit.MILLISECONDS.toMinutes(remainingMs)
                 val remainingSec = TimeUnit.MILLISECONDS.toSeconds(remainingMs) % 60
 
@@ -483,8 +484,7 @@ fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.weight(1f))
                         TextButton(onClick = {
-                            sleepTimerEndMs = 0L
-                            sleepTimerMinutes = 0L
+                            playerService?.cancelSleepTimer()
                         }) {
                             Text("Cancel", color = MaterialTheme.colorScheme.error)
                         }
@@ -509,7 +509,7 @@ fun SettingsScreen(
                             selected = sleepTimerMinutes == minutes.toLong() && isActive,
                             onClick = {
                                 sleepTimerMinutes = minutes.toLong()
-                                sleepTimerEndMs = System.currentTimeMillis() + minutes * 60 * 1000L
+                                playerService?.startSleepTimer(minutes)
                             },
                             label = { Text("${minutes}m") },
                             shape = RoundedCornerShape(20.dp),
@@ -562,7 +562,7 @@ fun SettingsScreen(
                             val mins = customMinutes.toLongOrNull() ?: 0L
                             if (mins > 0) {
                                 sleepTimerMinutes = mins
-                                sleepTimerEndMs = System.currentTimeMillis() + mins * 60 * 1000L
+                                playerService?.startSleepTimer(mins.toInt())
                             }
                         },
                         shape = RoundedCornerShape(12.dp),

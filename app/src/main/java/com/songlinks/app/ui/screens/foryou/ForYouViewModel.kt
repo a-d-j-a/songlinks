@@ -11,7 +11,10 @@ import com.songlinks.app.api.SongResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import android.util.Log
 import kotlinx.coroutines.launch
+
+private const val TAG = "ForYouViewModel"
 
 class ForYouViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -50,10 +53,14 @@ class ForYouViewModel(application: Application) : AndroidViewModel(application) 
                 val history: List<SongResult> = gson.fromJson(json, type) ?: emptyList()
                 _recentlyPlayed.value = history.take(10)
                 computeTopArtists(history)
+                Log.d(TAG, "loadHistory: historySize=${history.size}, topArtistsCount=${_topArtists.value.size}")
             } catch (e: Exception) {
                 _recentlyPlayed.value = emptyList()
                 _topArtists.value = emptyList()
+                Log.e(TAG, "loadHistory: failed to parse history", e)
             }
+        } else {
+            Log.d(TAG, "loadHistory: no history found")
         }
     }
 
@@ -92,8 +99,10 @@ class ForYouViewModel(application: Application) : AndroidViewModel(application) 
                 }
 
                 _recommendations.value = allResults.distinctBy { it.id }.take(20)
+                Log.d(TAG, "loadRecommendations: topArtists=${queries.size}, recommendationsCount=${_recommendations.value.size}")
             } catch (e: Exception) {
                 _error.value = e.message ?: "Failed to load recommendations"
+                Log.e(TAG, "loadRecommendations: failed", e)
             } finally {
                 _isLoading.value = false
             }
@@ -101,6 +110,7 @@ class ForYouViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun refresh() {
+        Log.d(TAG, "refresh: refreshing data")
         viewModelScope.launch {
             _isRefreshing.value = true
             loadHistory()

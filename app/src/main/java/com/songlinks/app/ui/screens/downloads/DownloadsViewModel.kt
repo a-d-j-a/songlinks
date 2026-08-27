@@ -1,6 +1,7 @@
 package com.songlinks.app.ui.screens.downloads
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.songlinks.app.SongLinksApp
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+private const val TAG = "DownloadsViewModel"
+
 class DownloadsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val dao = (application as SongLinksApp).database.downloadDao()
@@ -24,16 +27,19 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
     val totalSize: StateFlow<Long> = _totalSize.asStateFlow()
 
     init {
+        Log.d(TAG, "init")
         loadTotalSize()
     }
 
     private fun loadTotalSize() {
+        Log.d(TAG, "loadTotalSize")
         viewModelScope.launch {
             _totalSize.value = dao.getTotalSize()
         }
     }
 
     fun deleteDownload(download: DownloadEntity) {
+        Log.d(TAG, "deleteDownload: ${download.songId}")
         viewModelScope.launch {
             val file = java.io.File(download.filePath)
             if (file.exists()) {
@@ -45,6 +51,7 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun downloadEntityToResult(entity: DownloadEntity): SongResult {
+        Log.d(TAG, "downloadEntityToResult: ${entity.songId}")
         return SongResult(
             source = entity.source,
             id = entity.songId,

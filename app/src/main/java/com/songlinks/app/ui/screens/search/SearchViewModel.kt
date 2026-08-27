@@ -33,7 +33,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    private val _activeSources = MutableStateFlow(setOf("itunes", "jiosaavn", "youtube"))
+    private val _activeSources = MutableStateFlow(setOf("itunes", "jiosaavn", "ytmusic"))
     val activeSources: StateFlow<Set<String>> = _activeSources.asStateFlow()
 
     init {

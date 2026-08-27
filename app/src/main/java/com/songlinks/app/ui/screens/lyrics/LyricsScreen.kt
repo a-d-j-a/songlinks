@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -60,6 +61,8 @@ fun LyricsScreen(
     onBack: () -> Unit = {},
     viewModel: LyricsViewModel = viewModel()
 ) {
+    LaunchedEffect(Unit) { Log.d("LyricsScreen", "Composing: title=$title, artist=$artist") }
+
     LaunchedEffect(title, artist) {
         viewModel.fetchLyrics(title, artist)
     }

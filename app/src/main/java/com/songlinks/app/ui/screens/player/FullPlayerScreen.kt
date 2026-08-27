@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
@@ -46,7 +47,9 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import android.util.Log
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -92,6 +95,10 @@ fun FullPlayerScreen(
     var isFavorite by remember { mutableStateOf(false) }
 
     val song = currentSong
+
+    LaunchedEffect(Unit) {
+        Log.d("FullPlayerScreen", "Player opened for: ${song?.title ?: "no song"}")
+    }
 
     Box(
         modifier = Modifier
@@ -139,6 +146,7 @@ fun FullPlayerScreen(
             SeekBar(
                 position = if (isSeeking) seekPosition.toLong() else position,
                 duration = duration,
+                seekPosition = seekPosition,
                 onSeekStarted = { pos ->
                     isSeeking = true
                     seekPosition = pos.toFloat()
@@ -382,6 +390,7 @@ private fun SongInfo(
 private fun SeekBar(
     position: Long,
     duration: Long,
+    seekPosition: Float,
     onSeekStarted: (Long) -> Unit,
     onSeekChanged: (Long) -> Unit,
     onSeekFinished: (Long) -> Unit
@@ -400,7 +409,7 @@ private fun SeekBar(
             onValueChange = { newProgress ->
                 onSeekChanged((newProgress * duration).toLong())
             },
-            onValueChangeFinished = { onSeekFinished((progress * duration).toLong()) },
+            onValueChangeFinished = { onSeekFinished(seekPosition.toLong()) },
             valueRange = 0f..1f,
             colors = SliderDefaults.colors(
                 thumbColor = PrimaryDark,
@@ -547,7 +556,7 @@ private fun ExtraControls(
 
         IconButton(onClick = onShare) {
             Icon(
-                imageVector = Icons.Default.Close,
+                imageVector = Icons.Default.Share,
                 contentDescription = "Share",
                 tint = ControlButtonColor,
                 modifier = Modifier.size(24.dp)

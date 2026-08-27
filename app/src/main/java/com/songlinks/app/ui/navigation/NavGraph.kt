@@ -1,7 +1,9 @@
 package com.songlinks.app.ui.navigation
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -33,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -46,6 +49,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.songlinks.app.api.SongApi
 import com.songlinks.app.ui.components.MiniPlayer
 import com.songlinks.app.ui.screens.downloads.DownloadsScreen
 import com.songlinks.app.ui.screens.foryou.ForYouScreen
@@ -62,8 +66,14 @@ import com.songlinks.app.ui.theme.Accent
 import com.songlinks.app.ui.theme.OnSurfaceVariant
 import com.songlinks.app.ui.theme.Surface
 import com.songlinks.app.ui.theme.SurfaceVariant
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.URLDecoder
 import java.net.URLEncoder
+
+private const val TAG = "NavGraph"
 
 data class BottomNavItem(
     val route: String,
@@ -83,12 +93,34 @@ val bottomNavItems = listOf(
 
 private fun playSongFromNav(
     playerService: PlayerService?,
-    song: com.songlinks.app.api.SongResult
+    song: com.songlinks.app.api.SongResult,
+    scope: CoroutineScope,
+    context: Context
 ) {
+    Log.d(TAG, "playSongFromNav: ${song.title} by ${song.artist} (source: ${song.source}, id: ${song.id})")
     PlayerState.playSong(song)
     val url = song.streams.firstOrNull()?.url ?: song.streamUrl
     if (url.isNotBlank()) {
+        Log.d(TAG, "Playing directly: ${url.take(80)}")
         playerService?.play(url, song.title, song.artist)
+    } else {
+        Log.d(TAG, "Stream URL empty, resolving via /stream endpoint for id: ${song.id}")
+        scope.launch(Dispatchers.IO) {
+            try {
+                val api = SongApi(context)
+                val resolvedUrl = api.resolveStreamUrl(song.id)
+                Log.d(TAG, "Resolved URL: ${resolvedUrl.take(80)}")
+                if (resolvedUrl.isNotBlank()) {
+                    withContext(Dispatchers.Main) {
+                        playerService?.play(resolvedUrl, song.title, song.artist)
+                    }
+                } else {
+                    Log.e(TAG, "Could not resolve stream URL for ${song.id}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error resolving stream URL for ${song.id}", e)
+            }
+        }
     }
 }
 
@@ -98,9 +130,12 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var isPlayerExpanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+
+    Log.d(TAG, "SongLinksNavGraph: currentRoute=$currentRoute")
 
     Scaffold(
         containerColor = Surface,
@@ -114,7 +149,10 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
                     exit = slideOutVertically(targetOffsetY = { it })
                 ) {
                     MiniPlayer(
-                        onNavigateToFullPlayer = { isPlayerExpanded = true },
+                        onNavigateToFullPlayer = {
+                            Log.d(TAG, "Player expanded")
+                            isPlayerExpanded = true
+                        },
                         playerService = playerService
                     )
                 }
@@ -169,7 +207,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
         ) {
             composable("home") {
                 HomeScreen(
-                    onSongTap = { song -> playSongFromNav(playerService, song) },
+                    onSongTap = { song -> playSongFromNav(playerService, song, coroutineScope, context) },
                     onSearch = {
                         selectedTab = 2
                         navController.navigate("search") {
@@ -184,7 +222,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
             }
             composable("foryou") {
                 ForYouScreen(
-                    onSongTap = { song -> playSongFromNav(playerService, song) }
+                    onSongTap = { song -> playSongFromNav(playerService, song, coroutineScope, context) }
                 )
             }
             composable(
@@ -199,7 +237,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
                 val query = backStackEntry.arguments?.getString("query") ?: ""
                 SearchScreen(
                     initialQuery = query,
-                    onSongClick = { song -> playSongFromNav(playerService, song) },
+                    onSongClick = { song -> playSongFromNav(playerService, song, coroutineScope, context) },
                     onOpenInBrowser = { url ->
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                     }
@@ -208,7 +246,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
             composable("search") {
                 SearchScreen(
                     initialQuery = "",
-                    onSongClick = { song -> playSongFromNav(playerService, song) },
+                    onSongClick = { song -> playSongFromNav(playerService, song, coroutineScope, context) },
                     onOpenInBrowser = { url ->
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                     }
@@ -216,7 +254,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
             }
             composable("library") {
                 LibraryScreen(
-                    onSongClick = { song -> playSongFromNav(playerService, song) },
+                    onSongClick = { song -> playSongFromNav(playerService, song, coroutineScope, context) },
                     onOpenInBrowser = { url ->
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                     }
@@ -224,12 +262,12 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
             }
             composable("downloads") {
                 DownloadsScreen(
-                    onSongTap = { song -> playSongFromNav(playerService, song) }
+                    onSongTap = { song -> playSongFromNav(playerService, song, coroutineScope, context) }
                 )
             }
             composable("playlists") {
                 PlaylistsScreen(
-                    onSongTap = { song -> playSongFromNav(playerService, song) }
+                    onSongTap = { song -> playSongFromNav(playerService, song, coroutineScope, context) }
                 )
             }
             composable(
@@ -250,14 +288,17 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
                 )
             }
             composable("settings") {
-                SettingsScreen()
+                SettingsScreen(playerService = playerService)
             }
         }
 
         val currentSong by PlayerState.currentSong.collectAsState()
         if (isPlayerExpanded && currentSong != null) {
             FullPlayerScreen(
-                onDismiss = { isPlayerExpanded = false },
+                onDismiss = {
+                    Log.d(TAG, "Player collapsed")
+                    isPlayerExpanded = false
+                },
                 onNavigateToLyrics = { encodedTitle, encodedArtist ->
                     navController.navigate("lyrics/$encodedTitle/$encodedArtist")
                 },

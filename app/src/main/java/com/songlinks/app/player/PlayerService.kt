@@ -1,5 +1,6 @@
 package com.songlinks.app.player
 
+import android.util.Log
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -35,6 +36,8 @@ import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+
+private const val TAG = "PlayerService"
 
 class PlayerService : LifecycleService() {
 
@@ -109,6 +112,7 @@ class PlayerService : LifecycleService() {
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            Log.e(TAG, "onPlayerError: ${error.message}", error)
             PlayerState.togglePlay()
         }
     }
@@ -167,18 +171,24 @@ class PlayerService : LifecycleService() {
 
     @OptIn(UnstableApi::class)
     fun play(url: String, title: String, artist: String) {
+        Log.d(TAG, "play() url=$url, title=$title, artist=$artist")
         requestAudioFocus()
         val player = exoPlayer ?: return
         val mediaItem = MediaItem.fromUri(url)
         player.setMediaItem(mediaItem)
         player.prepare()
         player.play()
+        Log.d(TAG, "play() starting foreground notification")
         startForeground(NOTIFICATION_ID, buildNotification(title, artist))
     }
 
     fun playSong(song: SongResult) {
         val streamUrl = song.streams.firstOrNull()?.url
-        if (streamUrl.isNullOrBlank()) return
+        if (streamUrl.isNullOrBlank()) {
+            Log.w(TAG, "playSong() no stream URL for: ${song.title} - ${song.artist}")
+            return
+        }
+        Log.d(TAG, "playSong() ${song.title} - ${song.artist}, streamUrl=$streamUrl")
         val durationMs = (song.duration ?: 0).toLong() * 1000L
         PlayerState.playSong(song)
         PlayerState.updateDuration(durationMs)
@@ -186,6 +196,7 @@ class PlayerService : LifecycleService() {
     }
 
     fun pause() {
+        Log.d(TAG, "pause()")
         exoPlayer?.pause()
         if (PlayerState.isPlaying.value) {
             PlayerState.togglePlay()
@@ -194,6 +205,7 @@ class PlayerService : LifecycleService() {
     }
 
     fun resume() {
+        Log.d(TAG, "resume()")
         requestAudioFocus()
         exoPlayer?.play()
         if (!PlayerState.isPlaying.value) {
@@ -222,8 +234,10 @@ class PlayerService : LifecycleService() {
         get() = PlayerState.currentSong.value?.artist ?: ""
 
     fun skipToNext() {
+        Log.d(TAG, "skipToNext()")
         val currentQueue = PlayerState.queue.value
         if (currentQueue.isEmpty()) {
+            Log.d(TAG, "skipToNext() queue empty, pausing")
             pause()
             return
         }
@@ -232,16 +246,20 @@ class PlayerService : LifecycleService() {
         if (newSong != null) {
             val streamUrl = newSong.streams.firstOrNull()?.url
             if (!streamUrl.isNullOrBlank()) {
+                Log.d(TAG, "skipToNext() playing: ${newSong.title} - ${newSong.artist}")
                 play(streamUrl, newSong.title, newSong.artist)
             } else {
+                Log.w(TAG, "skipToNext() no stream URL for: ${newSong.title} - ${newSong.artist}")
                 pause()
             }
         } else {
+            Log.d(TAG, "skipToNext() no next song, pausing")
             pause()
         }
     }
 
     fun skipToPrevious() {
+        Log.d(TAG, "skipToPrevious()")
         val currentQueue = PlayerState.queue.value
         if (currentQueue.isEmpty()) return
         PlayerState.previous()
@@ -249,23 +267,29 @@ class PlayerService : LifecycleService() {
         if (newSong != null) {
             val streamUrl = newSong.streams.firstOrNull()?.url
             if (!streamUrl.isNullOrBlank()) {
+                Log.d(TAG, "skipToPrevious() playing: ${newSong.title} - ${newSong.artist}")
                 play(streamUrl, newSong.title, newSong.artist)
+            } else {
+                Log.w(TAG, "skipToPrevious() no stream URL for: ${newSong.title} - ${newSong.artist}")
             }
         }
     }
 
     fun setQueueAndPlay(songs: List<SongResult>, startIndex: Int = 0) {
+        Log.d(TAG, "setQueueAndPlay() songs=${songs.size}, startIndex=$startIndex")
         PlayerState.playQueue(songs, startIndex)
         val song = songs.getOrNull(startIndex) ?: return
         playSong(song)
     }
 
     private fun onTrackComplete() {
+        Log.d(TAG, "onTrackComplete()")
         val currentQueue = PlayerState.queue.value
         val index = PlayerState.currentIndex.value
         val repeat = PlayerState.repeatMode.value
 
         if (repeat == 2) {
+            Log.d(TAG, "onTrackComplete() repeat all, seeking to start")
             exoPlayer?.seekTo(0)
             exoPlayer?.play()
             return
@@ -283,6 +307,7 @@ class PlayerService : LifecycleService() {
             if (newSong != null) {
                 val streamUrl = newSong.streams.firstOrNull()?.url
                 if (!streamUrl.isNullOrBlank()) {
+                    Log.d(TAG, "onTrackComplete() playing next: ${newSong.title} - ${newSong.artist}")
                     play(streamUrl, newSong.title, newSong.artist)
                     return
                 }
@@ -290,6 +315,7 @@ class PlayerService : LifecycleService() {
         }
 
         if (repeat == 1 && currentQueue.isNotEmpty()) {
+            Log.d(TAG, "onTrackComplete() repeat one, replaying first song")
             val firstSong = currentQueue[0]
             PlayerState.playQueue(currentQueue, 0)
             val streamUrl = firstSong.streams.firstOrNull()?.url
@@ -299,6 +325,7 @@ class PlayerService : LifecycleService() {
             }
         }
 
+        Log.d(TAG, "onTrackComplete() no more tracks, stopping")
         PlayerState.togglePlay()
         stopPositionPolling()
         stopForeground(STOP_FOREGROUND_DETACH)
@@ -405,6 +432,7 @@ class PlayerService : LifecycleService() {
     }
 
     fun startSleepTimer(minutes: Int) {
+        Log.d(TAG, "startSleepTimer() minutes=$minutes")
         cancelSleepTimer()
         val durationMs = minutes.toLong() * 60_000L
         sleepTimerEndTime = System.currentTimeMillis() + durationMs
@@ -416,6 +444,7 @@ class PlayerService : LifecycleService() {
                 remaining -= 1000L
                 PlayerState.updateSleepTimerRemaining(remaining)
             }
+            Log.d(TAG, "startSleepTimer() timer expired, pausing")
             pause()
             PlayerState.updateSleepTimerRemaining(0L)
             sleepTimerEndTime = 0L
@@ -423,6 +452,7 @@ class PlayerService : LifecycleService() {
     }
 
     fun cancelSleepTimer() {
+        Log.d(TAG, "cancelSleepTimer()")
         sleepTimerJob?.cancel()
         sleepTimerJob = null
         sleepTimerEndTime = 0L
@@ -432,6 +462,7 @@ class PlayerService : LifecycleService() {
     fun getSleepTimerEndTimestamp(): Long = sleepTimerEndTime
 
     fun enableEqualizer(bandLevels: ShortArray) {
+        Log.d(TAG, "enableEqualizer() bandLevels=${bandLevels.toList()}")
         disableEqualizer()
         val player = exoPlayer ?: return
         val audioSessionId = player.audioSessionId
@@ -454,6 +485,7 @@ class PlayerService : LifecycleService() {
     }
 
     fun disableEqualizer() {
+        Log.d(TAG, "disableEqualizer()")
         equalizer?.release()
         equalizer = null
         PlayerState.setEqualizerEnabled(false)

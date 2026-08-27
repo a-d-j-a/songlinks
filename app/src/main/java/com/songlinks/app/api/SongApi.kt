@@ -1,6 +1,7 @@
 package com.songlinks.app.api
 
 import android.content.Context
+import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonParser
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -15,6 +16,8 @@ import java.io.IOException
 import java.net.URLEncoder
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+
+private const val TAG = "SongApi"
 
 class SongApi(private val context: Context) {
 
@@ -36,6 +39,7 @@ class SongApi(private val context: Context) {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         val sourcesParam = sources.joinToString(",")
         val url = "$baseUrl/search?q=$encodedQuery&sources=$sourcesParam"
+        Log.d(TAG, "search() URL: $url")
 
         val request = Request.Builder()
             .url(url)
@@ -48,6 +52,7 @@ class SongApi(private val context: Context) {
 
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
+                    Log.e(TAG, "search() failed for query=$query", e)
                     if (continuation.isActive) {
                         continuation.resumeWithException(e)
                     }
@@ -56,6 +61,7 @@ class SongApi(private val context: Context) {
                 override fun onResponse(call: Call, response: Response) {
                     try {
                         if (!response.isSuccessful) {
+                            Log.e(TAG, "search() server error: ${response.code} for query=$query")
                             throw IOException("Server error: ${response.code}")
                         }
 
@@ -104,10 +110,12 @@ class SongApi(private val context: Context) {
                             }
                         }
 
+                        Log.d(TAG, "search() success: ${results.size} results for query=$query")
                         if (continuation.isActive) {
                             continuation.resume(results)
                         }
                     } catch (e: Exception) {
+                        Log.e(TAG, "search() parse error for query=$query", e)
                         if (continuation.isActive) {
                             continuation.resumeWithException(e)
                         }
@@ -120,6 +128,7 @@ class SongApi(private val context: Context) {
     suspend fun getRecommendations(history: List<Pair<String, String>>): List<SongResult> {
         val baseUrl = getBaseUrl().trimEnd('/')
         val url = "$baseUrl/recommendations"
+        Log.d(TAG, "getRecommendations() URL: $url, history size=${history.size}")
 
         val historyJson = history.map { (title, artist) ->
             mapOf("title" to title, "artist" to artist)
@@ -138,6 +147,7 @@ class SongApi(private val context: Context) {
 
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
+                    Log.e(TAG, "getRecommendations() failed", e)
                     if (continuation.isActive) {
                         continuation.resumeWithException(e)
                     }
@@ -146,6 +156,7 @@ class SongApi(private val context: Context) {
                 override fun onResponse(call: Call, response: Response) {
                     try {
                         if (!response.isSuccessful) {
+                            Log.e(TAG, "getRecommendations() server error: ${response.code}")
                             throw IOException("Server error: ${response.code}")
                         }
 
@@ -194,10 +205,12 @@ class SongApi(private val context: Context) {
                             }
                         }
 
+                        Log.d(TAG, "getRecommendations() success: ${results.size} results")
                         if (continuation.isActive) {
                             continuation.resume(results)
                         }
                     } catch (e: Exception) {
+                        Log.e(TAG, "getRecommendations() parse error", e)
                         if (continuation.isActive) {
                             continuation.resumeWithException(e)
                         }
@@ -212,6 +225,7 @@ class SongApi(private val context: Context) {
         val encodedTitle = URLEncoder.encode(title, "UTF-8")
         val encodedArtist = URLEncoder.encode(artist, "UTF-8")
         val url = "$baseUrl/lyrics?title=$encodedTitle&artist=$encodedArtist"
+        Log.d(TAG, "getLyrics() URL: $url")
 
         val request = Request.Builder()
             .url(url)
@@ -224,6 +238,7 @@ class SongApi(private val context: Context) {
 
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
+                    Log.e(TAG, "getLyrics() failed for title=$title artist=$artist", e)
                     if (continuation.isActive) {
                         continuation.resumeWithException(e)
                     }
@@ -232,6 +247,7 @@ class SongApi(private val context: Context) {
                 override fun onResponse(call: Call, response: Response) {
                     try {
                         if (!response.isSuccessful) {
+                            Log.e(TAG, "getLyrics() server error: ${response.code}")
                             throw IOException("Server error: ${response.code}")
                         }
 
@@ -245,10 +261,12 @@ class SongApi(private val context: Context) {
                             syncedLyrics = json.get("syncedLyrics")?.asString
                         )
 
+                        Log.d(TAG, "getLyrics() success: title=${lyricsResponse.title}, hasLyrics=${lyricsResponse.lyrics.isNotBlank()}, hasSynced=${lyricsResponse.syncedLyrics != null}")
                         if (continuation.isActive) {
                             continuation.resume(lyricsResponse)
                         }
                     } catch (e: Exception) {
+                        Log.e(TAG, "getLyrics() parse error", e)
                         if (continuation.isActive) {
                             continuation.resumeWithException(e)
                         }
@@ -261,6 +279,7 @@ class SongApi(private val context: Context) {
     suspend fun getBackupData(): BackupData {
         val baseUrl = getBaseUrl().trimEnd('/')
         val url = "$baseUrl/backup"
+        Log.d(TAG, "getBackupData() URL: $url")
 
         val request = Request.Builder()
             .url(url)
@@ -273,6 +292,7 @@ class SongApi(private val context: Context) {
 
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
+                    Log.e(TAG, "getBackupData() failed", e)
                     if (continuation.isActive) {
                         continuation.resume(BackupData())
                     }
@@ -281,6 +301,7 @@ class SongApi(private val context: Context) {
                 override fun onResponse(call: Call, response: Response) {
                     try {
                         if (!response.isSuccessful) {
+                            Log.e(TAG, "getBackupData() server error: ${response.code}")
                             if (continuation.isActive) {
                                 continuation.resume(BackupData())
                             }
@@ -290,10 +311,12 @@ class SongApi(private val context: Context) {
                         val body = response.body?.string() ?: throw IOException("Empty response")
                         val backupData = gson.fromJson(body, BackupData::class.java)
 
+                        Log.d(TAG, "getBackupData() success: ${backupData.songs.size} songs, ${backupData.history.size} history items")
                         if (continuation.isActive) {
                             continuation.resume(backupData)
                         }
                     } catch (e: Exception) {
+                        Log.e(TAG, "getBackupData() parse error", e)
                         if (continuation.isActive) {
                             continuation.resume(BackupData())
                         }
@@ -306,6 +329,7 @@ class SongApi(private val context: Context) {
     suspend fun restoreBackup(data: BackupData): Boolean {
         val baseUrl = getBaseUrl().trimEnd('/')
         val url = "$baseUrl/restore"
+        Log.d(TAG, "restoreBackup() URL: $url, songs=${data.songs.size}, history=${data.history.size}")
 
         val requestBody = gson.toJson(data)
             .toRequestBody("application/json".toMediaType())
@@ -321,12 +345,14 @@ class SongApi(private val context: Context) {
 
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
+                    Log.e(TAG, "restoreBackup() failed", e)
                     if (continuation.isActive) {
                         continuation.resume(false)
                     }
                 }
 
                 override fun onResponse(call: Call, response: Response) {
+                    Log.d(TAG, "restoreBackup() response code: ${response.code}")
                     response.close()
                     if (continuation.isActive) {
                         continuation.resume(response.isSuccessful)
@@ -336,9 +362,11 @@ class SongApi(private val context: Context) {
         }
     }
 
-    suspend fun checkHealth(): Boolean {
+    suspend fun resolveStreamUrl(songId: String): String {
         val baseUrl = getBaseUrl().trimEnd('/')
-        val url = "$baseUrl/health"
+        val encodedId = URLEncoder.encode(songId, "UTF-8")
+        val url = "$baseUrl/stream?id=$encodedId"
+        Log.d(TAG, "resolveStreamUrl() URL: $url")
 
         val request = Request.Builder()
             .url(url)
@@ -351,12 +379,65 @@ class SongApi(private val context: Context) {
 
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
+                    Log.e(TAG, "resolveStreamUrl() failed for id=$songId", e)
+                    if (continuation.isActive) {
+                        continuation.resume("")
+                    }
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    try {
+                        if (!response.isSuccessful) {
+                            Log.e(TAG, "resolveStreamUrl() server error: ${response.code} for id=$songId")
+                            if (continuation.isActive) {
+                                continuation.resume("")
+                            }
+                            return
+                        }
+
+                        val body = response.body?.string() ?: throw IOException("Empty response")
+                        val json = JsonParser.parseString(body).asJsonObject
+                        val resolvedUrl = json.get("streamUrl")?.asString ?: ""
+
+                        Log.d(TAG, "resolveStreamUrl() success: id=$songId, url=${resolvedUrl.take(80)}")
+                        if (continuation.isActive) {
+                            continuation.resume(resolvedUrl)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "resolveStreamUrl() parse error for id=$songId", e)
+                        if (continuation.isActive) {
+                            continuation.resume("")
+                        }
+                    }
+                }
+            })
+        }
+    }
+
+    suspend fun checkHealth(): Boolean {
+        val baseUrl = getBaseUrl().trimEnd('/')
+        val url = "$baseUrl/health"
+        Log.d(TAG, "checkHealth() URL: $url")
+
+        val request = Request.Builder()
+            .url(url)
+            .get()
+            .build()
+
+        return suspendCancellableCoroutine { continuation ->
+            val call = client.newCall(request)
+            continuation.invokeOnCancellation { call.cancel() }
+
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    Log.e(TAG, "checkHealth() failed", e)
                     if (continuation.isActive) {
                         continuation.resume(false)
                     }
                 }
 
                 override fun onResponse(call: Call, response: Response) {
+                    Log.d(TAG, "checkHealth() response code: ${response.code}, healthy=${response.isSuccessful}")
                     response.close()
                     if (continuation.isActive) {
                         continuation.resume(response.isSuccessful)
@@ -365,4 +446,5 @@ class SongApi(private val context: Context) {
             })
         }
     }
+
 }

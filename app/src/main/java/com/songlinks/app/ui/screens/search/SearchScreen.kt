@@ -88,7 +88,7 @@ fun SearchScreen(
     val error by viewModel.error.collectAsState()
     val activeSources by viewModel.activeSources.collectAsState()
 
-    val sources = listOf("itunes" to "iTunes", "jiosaavn" to "JioSaavn", "youtube" to "YouTube")
+    val sources = listOf("itunes" to "iTunes", "jiosaavn" to "JioSaavn", "ytmusic" to "YouTube")
 
     Column(
         modifier = Modifier
