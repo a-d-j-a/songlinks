@@ -5,32 +5,24 @@ import com.google.gson.JsonParser
 import com.songlinks.app.api.SongResult
 import com.songlinks.app.api.Stream
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.Response
-import java.io.IOException
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 private const val TAG = "YtmusicSource"
 private const val YT_INNERTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
 private const val YT_INNERTUBE_BASE = "https://music.youtube.com/youtubei/v1"
 private const val YT_BASE = "https://music.youtube.com"
 private const val MOBILE_UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-private const val ANDROID_UA = "com.google.android.youtube/19.09.37 (Linux; U; Android 13) gzip"
 
 object YtmusicSource {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
     suspend fun search(query: String, limit: Int = 10): List<SongResult> = withContext(Dispatchers.IO) {
@@ -62,7 +54,6 @@ object YtmusicSource {
             response.close()
 
             Log.d(TAG, "search() response code: ${response.code}, body length: ${body.length}")
-            if (body.length < 500) Log.d(TAG, "search() body: $body")
 
             if (!response.isSuccessful) {
                 Log.e(TAG, "search() HTTP ${response.code}")
@@ -71,14 +62,12 @@ object YtmusicSource {
 
             val json = JsonParser.parseString(body).asJsonObject
 
-            val songs = mutableListOf<SongResult>()
-
             val allItems = collectMusicItems(json)
             Log.d(TAG, "search() found ${allItems.size} musicResponsiveListItemRenderer items")
 
+            val songs = mutableListOf<SongResult>()
             for (item in allItems) {
-                val flex = item
-                val columns = flex.getAsJsonArray("flexColumns") ?: continue
+                val columns = item.getAsJsonArray("flexColumns") ?: continue
 
                 val videoId = columns[0].asJsonObject
                     ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
@@ -124,7 +113,7 @@ object YtmusicSource {
                     ?.get("text")?.asString ?: "0:00"
                 val durationSec = parseDuration(durationText)
 
-                val thumbnails = flex.getAsJsonObject("thumbnail")
+                val thumbnails = item.getAsJsonObject("thumbnail")
                     ?.getAsJsonObject("musicThumbnailRenderer")
                     ?.getAsJsonObject("thumbnail")
                     ?.getAsJsonArray("thumbnails")
@@ -154,7 +143,7 @@ object YtmusicSource {
             }
 
             val result = songs.take(limit)
-            Log.d(TAG, "search() found ${result.size} songs")
+            Log.d(TAG, "search() returning ${result.size} songs")
             result
         } catch (e: Exception) {
             Log.e(TAG, "search() error", e)
@@ -163,62 +152,67 @@ object YtmusicSource {
     }
 
     suspend fun getStreamUrl(videoId: String): String = withContext(Dispatchers.IO) {
-        try {
-            val payload = """{
-                "context": {
-                    "client": {
-                        "clientName": "ANDROID",
-                        "clientVersion": "19.09.37",
-                        "androidSdkVersion": 30,
-                        "hl": "en",
-                        "gl": "US"
-                    }
-                },
-                "videoId": "$videoId",
-                "contentCheckOk": true,
-                "racyCheckOk": true
-            }"""
+        Log.d(TAG, "getStreamUrl() for videoId=$videoId")
+        val clients = listOf(
+            Triple("ANDROID_MUSIC", "5.16.51", "com.google.android.apps.youtube.music/5.16.51 (Linux; U; Android 13) gzip"),
+            Triple("ANDROID", "19.09.37", "com.google.android.youtube/19.09.37 (Linux; U; Android 13) gzip"),
+            Triple("WEB_REMIX", "1.20231030.00.00", MOBILE_UA)
+        )
 
-            val request = Request.Builder()
-                .url("$YT_INNERTUBE_BASE/player?key=$YT_INNERTUBE_KEY")
-                .header("User-Agent", ANDROID_UA)
-                .header("Content-Type", "application/json")
-                .header("Origin", YT_BASE)
-                .post(payload.toRequestBody("application/json".toMediaType()))
-                .build()
+        for ((clientName, clientVersion, userAgent) in clients) {
+            try {
+                val sdk = if (clientName.startsWith("ANDROID")) 30 else 0
+                val payload = buildString {
+                    append("""{"context":{"client":{"clientName":"$clientName","clientVersion":"$clientVersion","hl":"en","gl":"US"""")
+                    if (sdk > 0) append(""","androidSdkVersion":$sdk""")
+                    append("""}},"videoId":"$videoId","contentCheckOk":true,"racyCheckOk":true}""")
+                }
 
-            val response = client.newCall(request).execute()
-            val body = response.body?.string() ?: ""
-            response.close()
+                val request = Request.Builder()
+                    .url("$YT_INNERTUBE_BASE/player?key=$YT_INNERTUBE_KEY")
+                    .header("User-Agent", userAgent)
+                    .header("Content-Type", "application/json")
+                    .header("Origin", YT_BASE)
+                    .post(payload.toRequestBody("application/json".toMediaType()))
+                    .build()
 
-            if (!response.isSuccessful) {
-                Log.e(TAG, "getStreamUrl() HTTP ${response.code}")
-                return@withContext ""
+                val response = client.newCall(request).execute()
+                val body = response.body?.string() ?: ""
+                response.close()
+
+                if (!response.isSuccessful) {
+                    Log.d(TAG, "getStreamUrl() $clientName: HTTP ${response.code}")
+                    continue
+                }
+
+                val json = JsonParser.parseString(body).asJsonObject
+                val streamingData = json.getAsJsonObject("streamingData")
+                if (streamingData == null) {
+                    Log.d(TAG, "getStreamUrl() $clientName: no streamingData")
+                    continue
+                }
+
+                val formats = mutableListOf<com.google.gson.JsonObject>()
+                streamingData.getAsJsonArray("adaptiveFormats")?.let { formats.addAll(it.map { it.asJsonObject }) }
+                streamingData.getAsJsonArray("formats")?.let { formats.addAll(it.map { it.asJsonObject }) }
+
+                val audioFormat = formats
+                    .filter { it.get("mimeType")?.asString?.startsWith("audio/") == true }
+                    .maxByOrNull { it.get("bitrate")?.asInt ?: 0 }
+
+                val url = audioFormat?.get("url")?.asString
+                if (!url.isNullOrBlank()) {
+                    Log.d(TAG, "getStreamUrl() success with $clientName for videoId=$videoId")
+                    return@withContext url
+                }
+                Log.d(TAG, "getStreamUrl() $clientName: no direct URL (cipher required)")
+            } catch (e: Exception) {
+                Log.e(TAG, "getStreamUrl() $clientName failed", e)
             }
-
-            val json = JsonParser.parseString(body).asJsonObject
-            val streamingData = json.getAsJsonObject("streamingData") ?: return@withContext ""
-
-            val formats = mutableListOf<com.google.gson.JsonObject>()
-            streamingData.getAsJsonArray("adaptiveFormats")?.let { formats.addAll(it.map { it.asJsonObject }) }
-            streamingData.getAsJsonArray("formats")?.let { formats.addAll(it.map { it.asJsonObject }) }
-
-            val audioFormat = formats
-                .filter { it.get("mimeType")?.asString?.startsWith("audio/") == true }
-                .maxByOrNull { it.get("bitrate")?.asInt ?: 0 }
-
-            val url = audioFormat?.get("url")?.asString
-            if (url.isNullOrBlank()) {
-                Log.w(TAG, "getStreamUrl() no direct URL found (may need cipher)")
-                return@withContext ""
-            }
-
-            Log.d(TAG, "getStreamUrl() success for videoId=$videoId")
-            url
-        } catch (e: Exception) {
-            Log.e(TAG, "getStreamUrl() error for videoId=$videoId", e)
-            ""
         }
+
+        Log.w(TAG, "getStreamUrl() all clients failed for videoId=$videoId")
+        ""
     }
 
     private fun collectMusicItems(obj: com.google.gson.JsonObject): List<com.google.gson.JsonObject> {

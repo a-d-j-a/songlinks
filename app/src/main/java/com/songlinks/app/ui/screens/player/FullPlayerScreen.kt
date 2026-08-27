@@ -1,5 +1,7 @@
 package com.songlinks.app.ui.screens.player
 
+import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -28,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -39,17 +42,13 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.ShuffleOn
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import android.util.Log
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -89,16 +88,11 @@ fun FullPlayerScreen(
     val repeatMode by PlayerState.repeatMode.collectAsState()
 
     var showQueue by remember { mutableStateOf(false) }
-    var showLyrics by remember { mutableStateOf(false) }
-    var isSeeking by remember { mutableStateOf(false) }
-    var seekPosition by remember { mutableStateOf(0f) }
     var isFavorite by remember { mutableStateOf(false) }
 
     val song = currentSong
 
-    LaunchedEffect(Unit) {
-        Log.d("FullPlayerScreen", "Player opened for: ${song?.title ?: "no song"}")
-    }
+    BackHandler { onDismiss() }
 
     Box(
         modifier = Modifier
@@ -107,7 +101,7 @@ fun FullPlayerScreen(
                 Brush.verticalGradient(
                     colors = listOf(
                         Color(0xFF0D0D0D),
-                        Color(0xFF1A1A2E).copy(alpha = 0.95f),
+                        Color(0xFF1A1A2E),
                         Color(0xFF0D0D0D)
                     )
                 )
@@ -116,51 +110,81 @@ fun FullPlayerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(top = 16.dp, bottom = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            TopBar(
-                source = song?.source,
-                onDismiss = onDismiss
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Close",
+                        tint = OnSurfaceDark,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
 
-            Spacer(modifier = Modifier.height(8.dp))
+                if (!song?.source.isNullOrBlank()) {
+                    val sourceColor = when (song?.source?.lowercase()) {
+                        "itunes" -> SourceiTunes
+                        "jiosaavn" -> SourceJioSaavn
+                        "ytmusic", "youtube" -> SourceYT
+                        else -> PrimaryDark
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = sourceColor.copy(alpha = 0.12f),
+                        modifier = Modifier.height(24.dp)
+                    ) {
+                    Text(
+                        text = song?.source?.uppercase() ?: "",
+                            color = sourceColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+            }
 
             AlbumArt(
                 coverUrl = song?.cover,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 40.dp)
-                    .height(340.dp)
+                    .weight(1f)
+                    .padding(horizontal = 48.dp)
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             SongInfo(
                 title = song?.title ?: "Not Playing",
                 artist = song?.artist ?: "Unknown Artist"
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             SeekBar(
-                position = if (isSeeking) seekPosition.toLong() else position,
+                position = position,
                 duration = duration,
-                seekPosition = seekPosition,
-                onSeekStarted = { pos ->
-                    isSeeking = true
-                    seekPosition = pos.toFloat()
-                },
-                onSeekChanged = { pos ->
-                    seekPosition = pos.toFloat()
-                },
+                onSeekStarted = { },
+                onSeekChanged = { },
                 onSeekFinished = { pos ->
-                    isSeeking = false
-                    playerService?.seekTo(pos.toLong())
+                    playerService?.seekTo(pos)
                 }
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             MainControls(
                 isPlaying = isPlaying,
@@ -175,14 +199,25 @@ fun FullPlayerScreen(
                 onRepeat = { PlayerState.cycleRepeat() }
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            ExtraControls(
-                isFavorite = isFavorite,
-                showQueue = showQueue,
-                showLyrics = showLyrics,
-                onFavoriteToggle = { isFavorite = !isFavorite },
-                onShare = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 40.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                IconButton(onClick = { isFavorite = !isFavorite }) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Favorite",
+                        tint = if (isFavorite) FavoriteRed else ControlButtonColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                IconButton(onClick = {
                     val s = currentSong
                     if (s != null) {
                         val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
@@ -193,12 +228,27 @@ fun FullPlayerScreen(
                             android.content.Intent.createChooser(shareIntent, "Share song")
                         )
                     }
-                },
-                onQueueToggle = {
+                }) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Share",
+                        tint = ControlButtonColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                IconButton(onClick = {
                     showQueue = !showQueue
-                    if (showQueue) showLyrics = false
-                },
-                onLyricsToggle = {
+                }) {
+                    Icon(
+                        imageVector = Icons.Default.QueueMusic,
+                        contentDescription = "Queue",
+                        tint = if (showQueue) ActiveControlColor else ControlButtonColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                IconButton(onClick = {
                     val s = currentSong
                     if (s != null) {
                         onNavigateToLyrics(
@@ -206,10 +256,15 @@ fun FullPlayerScreen(
                             java.net.URLEncoder.encode(s.artist, "UTF-8")
                         )
                     }
+                }) {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = "Lyrics",
+                        tint = ControlButtonColor,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
+            }
 
             AnimatedVisibility(
                 visible = showQueue,
@@ -221,87 +276,10 @@ fun FullPlayerScreen(
                     currentIndex = PlayerState.currentIndex.collectAsState().value,
                     onSongClick = { index ->
                         playerService?.setQueueAndPlay(queue, index)
-                    }
+                    },
+                    modifier = Modifier.heightIn(max = 200.dp)
                 )
             }
-
-            AnimatedVisibility(
-                visible = showLyrics,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-            ) {
-                LyricsPanel()
-            }
-        }
-    }
-}
-
-@Composable
-private fun TopBar(
-    source: String?,
-    onDismiss: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(PrimaryDark.copy(alpha = 0.15f))
-                .clickable { },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.MusicNote,
-                contentDescription = null,
-                tint = PrimaryDark,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        if (!source.isNullOrBlank()) {
-            val sourceColor = when (source.lowercase()) {
-                "itunes" -> SourceiTunes
-                "jiosaavn" -> SourceJioSaavn
-                "ytmusic", "youtube" -> SourceYT
-                else -> PrimaryDark
-            }
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = sourceColor.copy(alpha = 0.12f),
-                modifier = Modifier.height(24.dp)
-            ) {
-                Text(
-                    text = source.uppercase(),
-                    color = sourceColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        IconButton(
-            onClick = onDismiss,
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.08f))
-        ) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Close",
-                tint = OnSurfaceDark,
-                modifier = Modifier.size(18.dp)
-            )
         }
     }
 }
@@ -390,11 +368,12 @@ private fun SongInfo(
 private fun SeekBar(
     position: Long,
     duration: Long,
-    seekPosition: Float,
     onSeekStarted: (Long) -> Unit,
     onSeekChanged: (Long) -> Unit,
     onSeekFinished: (Long) -> Unit
 ) {
+    var seekPosition by remember { mutableStateOf(0f) }
+    var isSeeking by remember { mutableStateOf(false) }
     val progress = if (duration > 0) {
         (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
     } else 0f
@@ -405,11 +384,15 @@ private fun SeekBar(
             .padding(horizontal = 28.dp)
     ) {
         Slider(
-            value = progress,
+            value = if (isSeeking) seekPosition else progress,
             onValueChange = { newProgress ->
-                onSeekChanged((newProgress * duration).toLong())
+                isSeeking = true
+                seekPosition = newProgress
             },
-            onValueChangeFinished = { onSeekFinished(seekPosition.toLong()) },
+            onValueChangeFinished = {
+                isSeeking = false
+                onSeekFinished((seekPosition * duration).toLong())
+            },
             valueRange = 0f..1f,
             colors = SliderDefaults.colors(
                 thumbColor = PrimaryDark,
@@ -423,8 +406,9 @@ private fun SeekBar(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            val displayPos = if (isSeeking) (seekPosition * duration).toLong() else position
             Text(
-                text = formatDuration(position),
+                text = formatDuration(displayPos),
                 color = OnSurfaceVariantDark,
                 fontSize = 12.sp
             )
@@ -455,18 +439,23 @@ private fun MainControls(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
-        ControlButton(
-            icon = if (shuffleEnabled) Icons.Default.ShuffleOn else Icons.Default.Shuffle,
-            isActive = shuffleEnabled,
-            size = 28.dp,
-            onClick = onShuffle
-        )
+        IconButton(onClick = onShuffle, modifier = Modifier.size(48.dp)) {
+            Icon(
+                imageVector = if (shuffleEnabled) Icons.Default.ShuffleOn else Icons.Default.Shuffle,
+                contentDescription = "Shuffle",
+                tint = if (shuffleEnabled) ActiveControlColor else ControlButtonColor,
+                modifier = Modifier.size(24.dp)
+            )
+        }
 
-        ControlButton(
-            icon = Icons.Default.SkipPrevious,
-            size = 36.dp,
-            onClick = onPrevious
-        )
+        IconButton(onClick = onPrevious, modifier = Modifier.size(56.dp)) {
+            Icon(
+                imageVector = Icons.Default.SkipPrevious,
+                contentDescription = "Previous",
+                tint = OnSurfaceDark,
+                modifier = Modifier.size(36.dp)
+            )
+        }
 
         Box(
             modifier = Modifier
@@ -488,95 +477,23 @@ private fun MainControls(
             )
         }
 
-        ControlButton(
-            icon = Icons.Default.SkipNext,
-            size = 36.dp,
-            onClick = onNext
-        )
-
-        ControlButton(
-            icon = when (repeatMode) {
-                2 -> Icons.Default.RepeatOne
-                else -> Icons.Default.Repeat
-            },
-            isActive = repeatMode != 0,
-            size = 28.dp,
-            onClick = onRepeat
-        )
-    }
-}
-
-@Composable
-private fun ControlButton(
-    icon: ImageVector,
-    isActive: Boolean = false,
-    size: androidx.compose.ui.unit.Dp = 28.dp,
-    onClick: () -> Unit
-) {
-    val iconSize = if (size.value > 30) 36 else 24
-
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier.size(48.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (isActive) ActiveControlColor else ControlButtonColor,
-            modifier = Modifier.size(iconSize.dp)
-        )
-    }
-}
-
-@Composable
-private fun ExtraControls(
-    isFavorite: Boolean,
-    showQueue: Boolean,
-    showLyrics: Boolean,
-    onFavoriteToggle: () -> Unit,
-    onShare: () -> Unit,
-    onQueueToggle: () -> Unit,
-    onLyricsToggle: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 40.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceEvenly
-    ) {
-        IconButton(onClick = onFavoriteToggle) {
+        IconButton(onClick = onNext, modifier = Modifier.size(56.dp)) {
             Icon(
-                imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                contentDescription = "Favorite",
-                tint = if (isFavorite) FavoriteRed else ControlButtonColor,
-                modifier = Modifier.size(24.dp)
+                imageVector = Icons.Default.SkipNext,
+                contentDescription = "Next",
+                tint = OnSurfaceDark,
+                modifier = Modifier.size(36.dp)
             )
         }
 
-        IconButton(onClick = onShare) {
+        IconButton(onClick = onRepeat, modifier = Modifier.size(48.dp)) {
             Icon(
-                imageVector = Icons.Default.Share,
-                contentDescription = "Share",
-                tint = ControlButtonColor,
-                modifier = Modifier.size(24.dp)
-            )
-        }
-
-        IconButton(onClick = onQueueToggle) {
-            Icon(
-                imageVector = Icons.Default.QueueMusic,
-                contentDescription = "Queue",
-                tint = if (showQueue) ActiveControlColor else ControlButtonColor,
-                modifier = Modifier.size(24.dp)
-            )
-        }
-
-        IconButton(onClick = onLyricsToggle) {
-            Icon(
-                imageVector = Icons.Default.MusicNote,
-                contentDescription = "Lyrics",
-                tint = if (showLyrics) ActiveControlColor else ControlButtonColor,
+                imageVector = when (repeatMode) {
+                    2 -> Icons.Default.RepeatOne
+                    else -> Icons.Default.Repeat
+                },
+                contentDescription = "Repeat",
+                tint = if (repeatMode != 0) ActiveControlColor else ControlButtonColor,
                 modifier = Modifier.size(24.dp)
             )
         }
@@ -587,144 +504,93 @@ private fun ExtraControls(
 private fun QueuePanel(
     queue: List<SongResult>,
     currentIndex: Int,
-    onSongClick: (Int) -> Unit
+    onSongClick: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = Modifier
+    Column(
+        modifier = modifier
             .fillMaxWidth()
-            .heightIn(max = 280.dp)
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1A1A2E).copy(alpha = 0.95f)
-        )
+            .padding(horizontal = 20.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = "Up Next",
-                color = OnSurfaceDark,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
+        Text(
+            text = "Up Next",
+            color = OnSurfaceDark,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
 
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                itemsIndexed(queue) { index, song ->
-                    val isCurrentSong = index == currentIndex
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                if (isCurrentSong) PrimaryDark.copy(alpha = 0.1f)
-                                else Color.Transparent
-                            )
-                            .clickable { onSongClick(index) }
-                            .padding(horizontal = 8.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (!song.cover.isNullOrBlank()) {
-                            AsyncImage(
-                                model = song.cover,
+        LazyColumn(modifier = Modifier.fillMaxWidth()) {
+            itemsIndexed(queue) { index, song ->
+                val isCurrentSong = index == currentIndex
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (isCurrentSong) PrimaryDark.copy(alpha = 0.1f)
+                            else Color.Transparent
+                        )
+                        .clickable { onSongClick(index) }
+                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (!song.cover.isNullOrBlank()) {
+                        AsyncImage(
+                            model = song.cover,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(GradientStart.copy(alpha = 0.3f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
                                 contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(GradientStart.copy(alpha = 0.3f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.MusicNote,
-                                    contentDescription = null,
-                                    tint = Color.White.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = song.title,
-                                color = if (isCurrentSong) PrimaryDark else OnSurfaceDark,
-                                fontSize = 14.sp,
-                                fontWeight = if (isCurrentSong) FontWeight.SemiBold else FontWeight.Normal,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = song.artist,
-                                color = OnSurfaceVariantDark,
-                                fontSize = 12.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        if (isCurrentSong) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(PrimaryDark)
+                                tint = Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = song.title,
+                            color = if (isCurrentSong) PrimaryDark else OnSurfaceDark,
+                            fontSize = 14.sp,
+                            fontWeight = if (isCurrentSong) FontWeight.SemiBold else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = song.artist,
+                            color = OnSurfaceVariantDark,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    if (isCurrentSong) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(PrimaryDark)
+                        )
+                    }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun LyricsPanel() {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 280.dp)
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1A1A2E).copy(alpha = 0.95f)
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Lyrics",
-                color = OnSurfaceDark,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp)
-            )
-
-            Spacer(modifier = Modifier.height(40.dp))
-            Icon(
-                imageVector = Icons.Default.MusicNote,
-                contentDescription = null,
-                tint = OnSurfaceVariantDark.copy(alpha = 0.3f),
-                modifier = Modifier.size(48.dp)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "No lyrics available",
-                color = OnSurfaceVariantDark.copy(alpha = 0.5f),
-                fontSize = 14.sp
-            )
         }
     }
 }
