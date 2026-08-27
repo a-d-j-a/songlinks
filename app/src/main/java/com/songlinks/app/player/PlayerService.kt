@@ -4,7 +4,9 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.media.audiofx.Equalizer
 import androidx.core.app.NotificationCompat
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
@@ -18,14 +20,21 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSession.Builder
 import androidx.annotation.OptIn
 import com.songlinks.app.MainActivity
 import com.songlinks.app.api.SongResult
 import com.songlinks.app.data.local.PlayerState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 
 class PlayerService : LifecycleService() {
 
@@ -47,6 +56,10 @@ class PlayerService : LifecycleService() {
     private var positionPollingJob: Job? = null
     private var audioFocusRequest: AudioFocusRequest? = null
     private var hasAudioFocus = false
+    private var sleepTimerJob: Job? = null
+    private var sleepTimerEndTime: Long = 0L
+    private var equalizer: Equalizer? = null
+    private var mediaSession: MediaSession? = null
 
     private val audioManager by lazy {
         getSystemService(AUDIO_SERVICE) as AudioManager
@@ -136,6 +149,7 @@ class PlayerService : LifecycleService() {
                 .build()
             setAudioAttributes(audioAttributes, true)
         }
+        mediaSession = Builder(this, exoPlayer!!).build()
     }
 
     private fun createNotificationChannel() {
@@ -370,6 +384,7 @@ class PlayerService : LifecycleService() {
             .addAction(android.R.drawable.ic_media_next, "Next", nextPendingIntent)
             .setStyle(
                 androidx.media.app.NotificationCompat.MediaStyle()
+                    .setMediaSession(mediaSession?.sessionToken)
                     .setShowActionsInCompactView(0, 1, 2)
             )
             .build()
@@ -377,10 +392,131 @@ class PlayerService : LifecycleService() {
 
     override fun onDestroy() {
         stopPositionPolling()
+        cancelSleepTimer()
+        disableEqualizer()
         abandonAudioFocus()
+        mediaSession?.run {
+            release()
+        }
+        mediaSession = null
         exoPlayer?.removeListener(playerListener)
         exoPlayer?.release()
         exoPlayer = null
         super.onDestroy()
+    }
+
+    fun startSleepTimer(minutes: Int) {
+        cancelSleepTimer()
+        val durationMs = minutes.toLong() * 60_000L
+        sleepTimerEndTime = System.currentTimeMillis() + durationMs
+        PlayerState.updateSleepTimerRemaining(durationMs)
+        sleepTimerJob = lifecycleScope.launch {
+            var remaining = durationMs
+            while (remaining > 0) {
+                delay(1000L)
+                remaining -= 1000L
+                PlayerState.updateSleepTimerRemaining(remaining)
+            }
+            pause()
+            PlayerState.updateSleepTimerRemaining(0L)
+            sleepTimerEndTime = 0L
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        sleepTimerEndTime = 0L
+        PlayerState.updateSleepTimerRemaining(0L)
+    }
+
+    fun getSleepTimerEndTimestamp(): Long = sleepTimerEndTime
+
+    fun enableEqualizer(bandLevels: ShortArray) {
+        disableEqualizer()
+        val player = exoPlayer ?: return
+        val audioSessionId = player.audioSessionId
+        equalizer = Equalizer(0, audioSessionId).apply {
+            enabled = true
+            val numBands = numberOfBands.toInt()
+            val minLevel = bandLevelRange[0]
+            val maxLevel = bandLevelRange[1]
+            for (i in 0 until numBands) {
+                val level = if (i < bandLevels.size) {
+                    bandLevels[i].coerceIn(minLevel, maxLevel)
+                } else {
+                    0
+                }
+                setBandLevel(i.toShort(), level)
+            }
+        }
+        PlayerState.setEqualizerEnabled(true)
+        updateEqualizerBandsState()
+    }
+
+    fun disableEqualizer() {
+        equalizer?.release()
+        equalizer = null
+        PlayerState.setEqualizerEnabled(false)
+        PlayerState.updateEqualizerBands(emptyList())
+    }
+
+    private fun updateEqualizerBandsState() {
+        val eq = equalizer ?: return
+        val numBands = eq.numberOfBands.toInt()
+        val bands = mutableListOf<Pair<Int, Short>>()
+        for (i in 0 until numBands) {
+            val freq = eq.bandFreq[i]
+            val level = eq.getBandLevel(i.toShort())
+            bands.add(freq to level)
+        }
+        PlayerState.updateEqualizerBands(bands)
+    }
+
+    fun getEqualizerPresets(): List<String> {
+        val eq = equalizer ?: return emptyList()
+        val count = eq.numberOfPresets.toInt()
+        return (0 until count).map { eq.getPresetName(it.toShort()) }
+    }
+
+    fun shareSong(context: Context, song: SongResult) {
+        val shareText = buildString {
+            append("${song.title} - ${song.artist}")
+            val url = song.pageUrl
+            if (url.isNotBlank()) {
+                append("\n$url")
+            }
+        }
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, shareText)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(Intent.createChooser(intent, "Share song").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        })
+    }
+
+    fun fetchLyrics(title: String, artist: String, baseUrl: String): Flow<String> = flow {
+        val encodedTitle = URLEncoder.encode(title, "UTF-8")
+        val encodedArtist = URLEncoder.encode(artist, "UTF-8")
+        val urlStr = "$baseUrl/lyrics?title=$encodedTitle&artist=$encodedArtist"
+        val connection = URL(urlStr).openConnection() as HttpURLConnection
+        try {
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 10000
+            connection.readTimeout = 10000
+            val responseCode = connection.responseCode
+            if (responseCode == 200) {
+                val body = connection.inputStream.bufferedReader().use { it.readText() }
+                emit(body)
+            } else {
+                emit("")
+            }
+        } catch (e: Exception) {
+            emit("")
+        } finally {
+            connection.disconnect()
+        }
     }
 }

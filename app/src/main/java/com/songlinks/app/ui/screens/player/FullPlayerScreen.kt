@@ -73,12 +73,14 @@ import com.songlinks.app.ui.theme.*
 @Composable
 fun FullPlayerScreen(
     onDismiss: () -> Unit,
+    onNavigateToLyrics: (String, String) -> Unit = { _, _ -> },
     playerService: PlayerService?
 ) {
     val currentSong by PlayerState.currentSong.collectAsState()
     val isPlaying by PlayerState.isPlaying.collectAsState()
     val position by PlayerState.position.collectAsState()
     val duration by PlayerState.duration.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val queue by PlayerState.queue.collectAsState()
     val shuffleEnabled by PlayerState.shuffle.collectAsState()
     val repeatMode by PlayerState.repeatMode.collectAsState()
@@ -172,14 +174,30 @@ fun FullPlayerScreen(
                 showQueue = showQueue,
                 showLyrics = showLyrics,
                 onFavoriteToggle = { isFavorite = !isFavorite },
-                onShare = {},
+                onShare = {
+                    val s = currentSong
+                    if (s != null) {
+                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_TEXT, "${s.title} - ${s.artist}\n${s.pageUrl}")
+                        }
+                        context.startActivity(
+                            android.content.Intent.createChooser(shareIntent, "Share song")
+                        )
+                    }
+                },
                 onQueueToggle = {
                     showQueue = !showQueue
                     if (showQueue) showLyrics = false
                 },
                 onLyricsToggle = {
-                    showLyrics = !showLyrics
-                    if (showLyrics) showQueue = false
+                    val s = currentSong
+                    if (s != null) {
+                        onNavigateToLyrics(
+                            java.net.URLEncoder.encode(s.title, "UTF-8"),
+                            java.net.URLEncoder.encode(s.artist, "UTF-8")
+                        )
+                    }
                 }
             )
 

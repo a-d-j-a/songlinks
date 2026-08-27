@@ -52,3 +52,23 @@ data class StreamFormat(
     val type: String? = null,
     val contentLength: Long? = null
 )
+
+data class LyricsResponse(
+    val title: String = "",
+    val artist: String = "",
+    val lyrics: String = "",
+    val syncedLyrics: String? = null
+)
+
+data class BackupData(
+    val version: String = "1.0",
+    val timestamp: Long = System.currentTimeMillis(),
+    val songs: List<SongResult> = emptyList(),
+    val history: List<SongResult> = emptyList(),
+    val playlists: List<PlaylistBackup> = emptyList()
+)
+
+data class PlaylistBackup(
+    val name: String,
+    val songs: List<SongResult>
+)

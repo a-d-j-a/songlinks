@@ -16,7 +16,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val api = SongApi(application)
 
     private val _serverUrl = MutableStateFlow(
-        prefs.getString("server_url", "http://10.0.2.2:8080") ?: "http://10.0.2.2:8080"
+        prefs.getString("server_url", "http://10.0.2.2:3000") ?: "http://10.0.2.2:3000"
     )
     val serverUrl: StateFlow<String> = _serverUrl.asStateFlow()
 
@@ -39,6 +39,19 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val _connectionResult = MutableStateFlow<Boolean?>(null)
     val connectionResult: StateFlow<Boolean?> = _connectionResult.asStateFlow()
+
+    private val _downloadQuality = MutableStateFlow(
+        prefs.getString("download_quality", "auto") ?: "auto"
+    )
+    val downloadQuality: StateFlow<String> = _downloadQuality.asStateFlow()
+
+    private val _downloadWifiOnly = MutableStateFlow(prefs.getBoolean("download_wifi_only", true))
+    val downloadWifiOnly: StateFlow<Boolean> = _downloadWifiOnly.asStateFlow()
+
+    private val _lastBackupDate = MutableStateFlow(
+        prefs.getLong("last_backup_date", 0L)
+    )
+    val lastBackupDate: StateFlow<Long> = _lastBackupDate.asStateFlow()
 
     fun updateServerUrl(url: String) {
         _serverUrl.value = url
@@ -63,6 +76,41 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun updateCrossfadeDuration(duration: Float) {
         _crossfadeDuration.value = duration
         prefs.edit().putFloat("crossfade_duration", duration).apply()
+    }
+
+    fun updateDownloadQuality(quality: String) {
+        _downloadQuality.value = quality
+        prefs.edit().putString("download_quality", quality).apply()
+    }
+
+    fun toggleDownloadWifiOnly() {
+        _downloadWifiOnly.value = !_downloadWifiOnly.value
+        prefs.edit().putBoolean("download_wifi_only", _downloadWifiOnly.value).apply()
+    }
+
+    fun exportBackup() {
+        viewModelScope.launch {
+            try {
+                val backupData = api.getBackupData()
+                _lastBackupDate.value = backupData.timestamp
+                prefs.edit().putLong("last_backup_date", backupData.timestamp).apply()
+            } catch (_: Exception) {
+                _lastBackupDate.value = System.currentTimeMillis()
+                prefs.edit().putLong("last_backup_date", _lastBackupDate.value).apply()
+            }
+        }
+    }
+
+    fun importBackup() {
+        viewModelScope.launch {
+            try {
+                val backupData = api.getBackupData()
+                api.restoreBackup(backupData)
+                _lastBackupDate.value = System.currentTimeMillis()
+                prefs.edit().putLong("last_backup_date", _lastBackupDate.value).apply()
+            } catch (_: Exception) {
+            }
+        }
     }
 
     fun testConnection() {
@@ -90,10 +138,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun clearAllData() {
         prefs.edit().clear().apply()
-        _serverUrl.value = "http://10.0.2.2:8080"
+        _serverUrl.value = "http://10.0.2.2:3000"
         _isDarkTheme.value = true
         _audioQuality.value = "auto"
         _crossfadeEnabled.value = false
         _crossfadeDuration.value = 3f
+        _downloadQuality.value = "auto"
+        _downloadWifiOnly.value = true
+        _lastBackupDate.value = 0L
     }
 }

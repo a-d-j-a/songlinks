@@ -8,12 +8,16 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LibraryMusic
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -44,9 +48,13 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.songlinks.app.api.SongResult
 import com.songlinks.app.ui.components.MiniPlayer
+import com.songlinks.app.ui.screens.downloads.DownloadsScreen
+import com.songlinks.app.ui.screens.foryou.ForYouScreen
 import com.songlinks.app.ui.screens.home.HomeScreen
 import com.songlinks.app.ui.screens.library.LibraryScreen
+import com.songlinks.app.ui.screens.lyrics.LyricsScreen
 import com.songlinks.app.ui.screens.player.FullPlayerScreen
+import com.songlinks.app.ui.screens.playlists.PlaylistsScreen
 import com.songlinks.app.ui.screens.search.SearchScreen
 import com.songlinks.app.ui.screens.settings.SettingsScreen
 import com.songlinks.app.data.local.PlayerState
@@ -55,6 +63,8 @@ import com.songlinks.app.ui.theme.Accent
 import com.songlinks.app.ui.theme.OnSurfaceVariant
 import com.songlinks.app.ui.theme.Surface
 import com.songlinks.app.ui.theme.SurfaceVariant
+import java.net.URLDecoder
+import java.net.URLEncoder
 
 data class BottomNavItem(
     val route: String,
@@ -65,8 +75,10 @@ data class BottomNavItem(
 
 val bottomNavItems = listOf(
     BottomNavItem("home", "Home", Icons.Filled.Home, Icons.Outlined.Home),
+    BottomNavItem("foryou", "For You", Icons.Filled.Person, Icons.Outlined.Person),
     BottomNavItem("search", "Search", Icons.Filled.Search, Icons.Outlined.Search),
     BottomNavItem("library", "Library", Icons.Filled.LibraryMusic, Icons.Outlined.LibraryMusic),
+    BottomNavItem("downloads", "Downloads", Icons.Filled.Download, Icons.Outlined.Download),
     BottomNavItem("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
 )
 
@@ -157,7 +169,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
                         )
                     },
                     onSearchNavigate = {
-                        selectedTab = 1
+                        selectedTab = 2
                         navController.navigate("search") {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true
@@ -165,6 +177,21 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
                             launchSingleTop = true
                             restoreState = true
                         }
+                    },
+                    onOpenInBrowser = { url ->
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }
+                )
+            }
+            composable("foryou") {
+                ForYouScreen(
+                    onSongClick = { song ->
+                        PlayerState.playSong(song)
+                        playerService?.play(
+                            song.streams.firstOrNull()?.url ?: song.streamUrl,
+                            song.title,
+                            song.artist
+                        )
                     },
                     onOpenInBrowser = { url ->
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -227,6 +254,51 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
                     }
                 )
             }
+            composable("downloads") {
+                DownloadsScreen(
+                    onSongClick = { song ->
+                        PlayerState.playSong(song)
+                        playerService?.play(
+                            song.streams.firstOrNull()?.url ?: song.streamUrl,
+                            song.title,
+                            song.artist
+                        )
+                    },
+                    onOpenInBrowser = { url ->
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }
+                )
+            }
+            composable("playlists") {
+                PlaylistsScreen(
+                    onSongClick = { song ->
+                        PlayerState.playSong(song)
+                        playerService?.play(
+                            song.streams.firstOrNull()?.url ?: song.streamUrl,
+                            song.title,
+                            song.artist
+                        )
+                    },
+                    onNavigateToPlayer = { isPlayerExpanded = true }
+                )
+            }
+            composable(
+                route = "lyrics/{title}/{artist}",
+                arguments = listOf(
+                    navArgument("title") { type = NavType.StringType },
+                    navArgument("artist") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val encodedTitle = backStackEntry.arguments?.getString("title") ?: ""
+                val encodedArtist = backStackEntry.arguments?.getString("artist") ?: ""
+                val title = URLDecoder.decode(encodedTitle, "UTF-8")
+                val artist = URLDecoder.decode(encodedArtist, "UTF-8")
+                LyricsScreen(
+                    title = title,
+                    artist = artist,
+                    onBack = { navController.popBackStack() }
+                )
+            }
             composable("settings") {
                 SettingsScreen()
             }
@@ -236,6 +308,9 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
         if (isPlayerExpanded && currentSong != null) {
             FullPlayerScreen(
                 onDismiss = { isPlayerExpanded = false },
+                onNavigateToLyrics = { encodedTitle, encodedArtist ->
+                    navController.navigate("lyrics/$encodedTitle/$encodedArtist")
+                },
                 playerService = playerService
             )
         }

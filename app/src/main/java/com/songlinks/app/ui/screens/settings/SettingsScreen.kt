@@ -23,11 +23,16 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MergeType
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -52,8 +57,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,6 +77,12 @@ import com.songlinks.app.ui.theme.Surface
 import com.songlinks.app.ui.theme.SurfaceVariant
 import com.songlinks.app.ui.theme.TextPrimary
 import com.songlinks.app.ui.theme.TextSecondary
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,9 +96,15 @@ fun SettingsScreen(
     val crossfadeDuration by viewModel.crossfadeDuration.collectAsState()
     val isTestingConnection by viewModel.isTestingConnection.collectAsState()
     val connectionResult by viewModel.connectionResult.collectAsState()
+    val downloadQuality by viewModel.downloadQuality.collectAsState()
+    val downloadWifiOnly by viewModel.downloadWifiOnly.collectAsState()
+    val lastBackupDate by viewModel.lastBackupDate.collectAsState()
 
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var showClearAllDialog by remember { mutableStateOf(false) }
+    var sleepTimerMinutes by remember { mutableLongStateOf(0L) }
+    var sleepTimerEndMs by remember { mutableLongStateOf(0L) }
+    val scope = rememberCoroutineScope()
 
     LazyColumn(
         modifier = Modifier
@@ -273,6 +292,283 @@ fun SettingsScreen(
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
+                    }
+                }
+            }
+        }
+
+        item {
+            SettingsSection(title = "DOWNLOADS") {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Filled.Download,
+                            contentDescription = null,
+                            tint = OnSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Download Quality",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = TextPrimary
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            "auto" to "Auto",
+                            "low" to "Low",
+                            "mid" to "Mid",
+                            "high" to "High"
+                        ).forEach { (value, label) ->
+                            FilterChip(
+                                selected = downloadQuality == value,
+                                onClick = { viewModel.updateDownloadQuality(value) },
+                                label = { Text(label) },
+                                shape = RoundedCornerShape(20.dp),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                SettingsSwitch(
+                    title = "Download over WiFi only",
+                    subtitle = "Save mobile data",
+                    icon = Icons.Filled.Wifi,
+                    checked = downloadWifiOnly,
+                    onCheckedChange = { viewModel.toggleDownloadWifiOnly() }
+                )
+
+                SettingsInfoRow(
+                    icon = Icons.Filled.Download,
+                    title = "Storage",
+                    value = "Internal storage"
+                )
+            }
+        }
+
+        item {
+            SettingsSection(title = "BACKUP") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Filled.CloudUpload,
+                        contentDescription = null,
+                        tint = OnSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Export Backup",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Save your data to server",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Button(
+                    onClick = { viewModel.exportBackup() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Accent)
+                ) {
+                    Icon(Icons.Filled.CloudUpload, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Export Backup")
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Filled.CloudDownload,
+                        contentDescription = null,
+                        tint = OnSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Import Backup",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Restore data from server",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                OutlinedButton(
+                    onClick = { viewModel.importBackup() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Accent),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Accent)
+                ) {
+                    Icon(Icons.Filled.CloudDownload, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Import Backup")
+                }
+
+                if (lastBackupDate > 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
+                    val dateStr = dateFormat.format(Date(lastBackupDate))
+                    SettingsInfoRow(
+                        icon = Icons.Filled.Info,
+                        title = "Last Backup",
+                        value = dateStr
+                    )
+                }
+            }
+        }
+
+        item {
+            SettingsSection(title = "SLEEP TIMER") {
+                val isActive = sleepTimerEndMs > System.currentTimeMillis()
+                val remainingMs = (sleepTimerEndMs - System.currentTimeMillis()).coerceAtLeast(0)
+                val remainingMin = TimeUnit.MILLISECONDS.toMinutes(remainingMs)
+                val remainingSec = TimeUnit.MILLISECONDS.toSeconds(remainingMs) % 60
+
+                if (isActive) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Filled.Timer,
+                            contentDescription = null,
+                            tint = Accent
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Active: ${remainingMin}:${String.format("%02d", remainingSec)}",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Accent
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        TextButton(onClick = {
+                            sleepTimerEndMs = 0L
+                            sleepTimerMinutes = 0L
+                        }) {
+                            Text("Cancel", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+
+                Text(
+                    text = "Quick Timer",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(15, 30, 45, 60, 90).forEach { minutes ->
+                        FilterChip(
+                            selected = sleepTimerMinutes == minutes.toLong() && isActive,
+                            onClick = {
+                                sleepTimerMinutes = minutes.toLong()
+                                sleepTimerEndMs = System.currentTimeMillis() + minutes * 60 * 1000L
+                            },
+                            label = { Text("${minutes}m") },
+                            shape = RoundedCornerShape(20.dp),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Custom (minutes)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    var customMinutes by remember { mutableStateOf("") }
+
+                    OutlinedTextField(
+                        value = customMinutes,
+                        onValueChange = { customMinutes = it.filter { c -> c.isDigit() } },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Minutes") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Accent,
+                            unfocusedBorderColor = CardBorder,
+                            focusedContainerColor = SurfaceVariant,
+                            unfocusedContainerColor = SurfaceVariant,
+                            cursorColor = Accent,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedLabelColor = Accent,
+                            unfocusedLabelColor = OnSurfaceVariant
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Button(
+                        onClick = {
+                            val mins = customMinutes.toLongOrNull() ?: 0L
+                            if (mins > 0) {
+                                sleepTimerMinutes = mins
+                                sleepTimerEndMs = System.currentTimeMillis() + mins * 60 * 1000L
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Accent)
+                    ) {
+                        Text("Set")
                     }
                 }
             }

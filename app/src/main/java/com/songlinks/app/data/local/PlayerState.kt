@@ -140,4 +140,40 @@ object PlayerState {
     fun updateDuration(durationMs: Long) {
         _duration.value = durationMs
     }
+
+    private val _sleepTimerRemaining = MutableStateFlow(0L)
+    val sleepTimerRemaining: StateFlow<Long> = _sleepTimerRemaining.asStateFlow()
+
+    fun updateSleepTimerRemaining(ms: Long) {
+        _sleepTimerRemaining.value = ms
+    }
+
+    private val _equalizerEnabled = MutableStateFlow(false)
+    val equalizerEnabled: StateFlow<Boolean> = _equalizerEnabled.asStateFlow()
+
+    fun setEqualizerEnabled(enabled: Boolean) {
+        _equalizerEnabled.value = enabled
+    }
+
+    private val _equalizerBands = MutableStateFlow<List<Pair<Int, Short>>>(emptyList())
+    val equalizerBands: StateFlow<List<Pair<Int, Short>>> = _equalizerBands.asStateFlow()
+
+    fun updateEqualizerBands(bands: List<Pair<Int, Short>>) {
+        _equalizerBands.value = bands
+    }
+
+    fun moveQueueItem(from: Int, to: Int) {
+        val currentQueue = _queue.value.toMutableList()
+        if (from !in currentQueue.indices || to !in currentQueue.indices) return
+        val item = currentQueue.removeAt(from)
+        currentQueue.add(to, item)
+        _queue.value = currentQueue
+        val curIdx = _currentIndex.value
+        _currentIndex.value = when (curIdx) {
+            from -> to
+            in (from + 1)..to -> curIdx - 1
+            in to until from -> curIdx + 1
+            else -> curIdx
+        }
+    }
 }

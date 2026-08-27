@@ -1,0 +1,111 @@
+package com.songlinks.app.ui.screens.foryou
+
+import android.app.Application
+import android.content.Context
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import com.songlinks.app.api.SongApi
+import com.songlinks.app.api.SongResult
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+class ForYouViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val api = SongApi(application)
+    private val prefs = application.getSharedPreferences("songlinks_prefs", Context.MODE_PRIVATE)
+    private val gson = Gson()
+
+    private val _recommendations = MutableStateFlow<List<SongResult>>(emptyList())
+    val recommendations: StateFlow<List<SongResult>> = _recommendations.asStateFlow()
+
+    private val _recentlyPlayed = MutableStateFlow<List<SongResult>>(emptyList())
+    val recentlyPlayed: StateFlow<List<SongResult>> = _recentlyPlayed.asStateFlow()
+
+    private val _topArtists = MutableStateFlow<List<Pair<String, Int>>>(emptyList())
+    val topArtists: StateFlow<List<Pair<String, Int>>> = _topArtists.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    init {
+        loadHistory()
+        loadRecommendations()
+    }
+
+    private fun loadHistory() {
+        val json = prefs.getString("play_history", null)
+        if (json != null) {
+            try {
+                val type = object : TypeToken<List<SongResult>>() {}.type
+                val history: List<SongResult> = gson.fromJson(json, type) ?: emptyList()
+                _recentlyPlayed.value = history.take(10)
+                computeTopArtists(history)
+            } catch (e: Exception) {
+                _recentlyPlayed.value = emptyList()
+                _topArtists.value = emptyList()
+            }
+        }
+    }
+
+    private fun computeTopArtists(history: List<SongResult>) {
+        val artists = history
+            .groupBy { it.artist }
+            .map { (artist, songs) -> artist to songs.size }
+            .sortedByDescending { it.second }
+            .take(5)
+        _topArtists.value = artists
+    }
+
+    private fun loadRecommendations() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+            try {
+                val topArtistsList = _topArtists.value
+                if (topArtistsList.isEmpty()) {
+                    _recommendations.value = emptyList()
+                    _isLoading.value = false
+                    return@launch
+                }
+
+                val allResults = mutableListOf<SongResult>()
+                val queries = topArtistsList.take(3).map { it.first }
+
+                for (query in queries) {
+                    try {
+                        val results = api.search(query, setOf("itunes", "jiosaavn"))
+                        allResults.addAll(results.filter { song ->
+                            _recentlyPlayed.value.none { it.id == song.id }
+                        })
+                    } catch (_: Exception) {
+                    }
+                }
+
+                _recommendations.value = allResults.distinctBy { it.id }.take(20)
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Failed to load recommendations"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun refresh() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            loadHistory()
+            loadRecommendations()
+            _isRefreshing.value = false
+        }
+    }
+}
