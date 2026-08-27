@@ -5,7 +5,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.AspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -74,6 +73,7 @@ import com.songlinks.app.ui.theme.SourceJioSaavn
 import com.songlinks.app.ui.theme.SourceYT
 import com.songlinks.app.ui.theme.SourceiTunes
 import com.songlinks.app.ui.theme.Surface
+import com.songlinks.app.ui.theme.SurfaceVariant
 import com.songlinks.app.ui.theme.TextPrimary
 import com.songlinks.app.ui.theme.TextSecondary
 

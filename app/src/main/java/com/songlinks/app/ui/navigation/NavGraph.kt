@@ -46,7 +46,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.songlinks.app.api.SongResult
 import com.songlinks.app.ui.components.MiniPlayer
 import com.songlinks.app.ui.screens.downloads.DownloadsScreen
 import com.songlinks.app.ui.screens.foryou.ForYouScreen
@@ -82,6 +81,17 @@ val bottomNavItems = listOf(
     BottomNavItem("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
 )
 
+private fun playSongFromNav(
+    playerService: PlayerService?,
+    song: com.songlinks.app.api.SongResult
+) {
+    PlayerState.playSong(song)
+    val url = song.streams.firstOrNull()?.url ?: song.streamUrl
+    if (url.isNotBlank()) {
+        playerService?.play(url, song.title, song.artist)
+    }
+}
+
 @Composable
 fun SongLinksNavGraph(playerService: PlayerService? = null) {
     val navController = rememberNavController()
@@ -97,7 +107,6 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
         bottomBar = {
             Column {
                 val currentSong by PlayerState.currentSong.collectAsState()
-                val isPlaying by PlayerState.isPlaying.collectAsState()
 
                 AnimatedVisibility(
                     visible = currentSong != null,
@@ -160,15 +169,8 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
         ) {
             composable("home") {
                 HomeScreen(
-                    onSongClick = { song ->
-                        PlayerState.playSong(song)
-                        playerService?.play(
-                            song.streams.firstOrNull()?.url ?: song.streamUrl,
-                            song.title,
-                            song.artist
-                        )
-                    },
-                    onSearchNavigate = {
+                    onSongTap = { song -> playSongFromNav(playerService, song) },
+                    onSearch = {
                         selectedTab = 2
                         navController.navigate("search") {
                             popUpTo(navController.graph.findStartDestination().id) {
@@ -177,25 +179,12 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
                             launchSingleTop = true
                             restoreState = true
                         }
-                    },
-                    onOpenInBrowser = { url ->
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                     }
                 )
             }
             composable("foryou") {
                 ForYouScreen(
-                    onSongClick = { song ->
-                        PlayerState.playSong(song)
-                        playerService?.play(
-                            song.streams.firstOrNull()?.url ?: song.streamUrl,
-                            song.title,
-                            song.artist
-                        )
-                    },
-                    onOpenInBrowser = { url ->
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                    }
+                    onSongTap = { song -> playSongFromNav(playerService, song) }
                 )
             }
             composable(
@@ -210,14 +199,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
                 val query = backStackEntry.arguments?.getString("query") ?: ""
                 SearchScreen(
                     initialQuery = query,
-                    onSongClick = { song ->
-                        PlayerState.playSong(song)
-                        playerService?.play(
-                            song.streams.firstOrNull()?.url ?: song.streamUrl,
-                            song.title,
-                            song.artist
-                        )
-                    },
+                    onSongClick = { song -> playSongFromNav(playerService, song) },
                     onOpenInBrowser = { url ->
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                     }
@@ -226,14 +208,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
             composable("search") {
                 SearchScreen(
                     initialQuery = "",
-                    onSongClick = { song ->
-                        PlayerState.playSong(song)
-                        playerService?.play(
-                            song.streams.firstOrNull()?.url ?: song.streamUrl,
-                            song.title,
-                            song.artist
-                        )
-                    },
+                    onSongClick = { song -> playSongFromNav(playerService, song) },
                     onOpenInBrowser = { url ->
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                     }
@@ -241,14 +216,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
             }
             composable("library") {
                 LibraryScreen(
-                    onSongClick = { song ->
-                        PlayerState.playSong(song)
-                        playerService?.play(
-                            song.streams.firstOrNull()?.url ?: song.streamUrl,
-                            song.title,
-                            song.artist
-                        )
-                    },
+                    onSongClick = { song -> playSongFromNav(playerService, song) },
                     onOpenInBrowser = { url ->
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                     }
@@ -256,30 +224,12 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
             }
             composable("downloads") {
                 DownloadsScreen(
-                    onSongClick = { song ->
-                        PlayerState.playSong(song)
-                        playerService?.play(
-                            song.streams.firstOrNull()?.url ?: song.streamUrl,
-                            song.title,
-                            song.artist
-                        )
-                    },
-                    onOpenInBrowser = { url ->
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                    }
+                    onSongTap = { song -> playSongFromNav(playerService, song) }
                 )
             }
             composable("playlists") {
                 PlaylistsScreen(
-                    onSongClick = { song ->
-                        PlayerState.playSong(song)
-                        playerService?.play(
-                            song.streams.firstOrNull()?.url ?: song.streamUrl,
-                            song.title,
-                            song.artist
-                        )
-                    },
-                    onNavigateToPlayer = { isPlayerExpanded = true }
+                    onSongTap = { song -> playSongFromNav(playerService, song) }
                 )
             }
             composable(

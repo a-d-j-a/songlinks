@@ -397,11 +397,11 @@ private fun SeekBar(
     ) {
         Slider(
             value = progress,
-            onValueChangeStarted = { onSeekStarted((progress * duration).toLong()) },
             onValueChange = { newProgress ->
                 onSeekChanged((newProgress * duration).toLong())
             },
             onValueChangeFinished = { onSeekFinished((progress * duration).toLong()) },
+            valueRange = 0f..1f,
             colors = SliderDefaults.colors(
                 thumbColor = PrimaryDark,
                 activeTrackColor = PrimaryDark,
