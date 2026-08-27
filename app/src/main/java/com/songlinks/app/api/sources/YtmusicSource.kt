@@ -5,12 +5,15 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonParser
 import com.songlinks.app.api.SongResult
+import com.songlinks.app.util.NewPipeDownloader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.schabi.newpipe.extractor.NewPipe
+import org.schabi.newpipe.extractor.ServiceList
 import java.util.concurrent.TimeUnit
 
 private const val TAG = "YtmusicSource"
@@ -295,8 +298,35 @@ object YtmusicSource {
             }
         }
 
-        Log.w(TAG, "getStreamUrl() all clients failed for videoId=$videoId")
-        ""
+        Log.w(TAG, "getStreamUrl() all clients failed for videoId=$videoId, trying NewPipe")
+        // Fallback to NewPipeExtractor which handles signature decipher and throttling bypass
+        return@withContext try {
+            try { NewPipe.init(NewPipeDownloader.getInstance()) } catch (_: Exception) {}
+            val service = ServiceList.YouTube
+            val url = "https://www.youtube.com/watch?v=$videoId"
+            val extractor = service.getStreamExtractor(url)
+            extractor.fetchPage()
+            val audioStreams = extractor.audioStreams
+            Log.d(TAG, "NewPipe found ${audioStreams.size} audio streams for $videoId")
+            val best = audioStreams.maxByOrNull { it.averageBitrate }
+            if (best != null && best.url.isNotBlank()) {
+                Log.d(TAG, "NewPipe success: bitrate=${best.averageBitrate}, url=${best.url.take(60)}")
+                best.url
+            } else {
+                val videoStreams = extractor.videoStreams
+                val vBest = videoStreams.maxByOrNull { it.height }
+                if (vBest != null && vBest.url.isNotBlank()) {
+                    Log.d(TAG, "NewPipe fallback video stream url")
+                    vBest.url
+                } else {
+                    Log.w(TAG, "NewPipe no streams for $videoId")
+                    ""
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "NewPipe extractor failed for $videoId", e)
+            ""
+        }
     }
 
     private fun collectMusicItems(obj: com.google.gson.JsonObject): List<com.google.gson.JsonObject> {
