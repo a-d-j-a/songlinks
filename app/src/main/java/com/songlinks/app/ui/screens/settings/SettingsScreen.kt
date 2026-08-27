@@ -88,7 +88,8 @@ import java.util.concurrent.TimeUnit
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel(),
-    playerService: com.songlinks.app.player.PlayerService? = null
+    playerService: com.songlinks.app.player.PlayerService? = null,
+    activity: com.songlinks.app.MainActivity? = null
 ) {
     val serverUrl by viewModel.serverUrl.collectAsState()
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
@@ -378,7 +379,7 @@ fun SettingsScreen(
                             color = TextPrimary
                         )
                         Text(
-                            text = "Save your data to server",
+                            text = "Save your data to a file",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary
                         )
@@ -388,7 +389,16 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Button(
-                    onClick = { viewModel.exportBackup() },
+                    onClick = {
+                        val json = viewModel.getExportJson()
+                        activity?.launchExport { uri ->
+                            val ctx = activity.applicationContext
+                            ctx.contentResolver.openOutputStream(uri)?.use { out ->
+                                out.write(json.toByteArray())
+                            }
+                            viewModel.onExportComplete()
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
@@ -397,7 +407,7 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Filled.CloudUpload, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Export Backup")
+                    Text("Export to File")
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -421,7 +431,7 @@ fun SettingsScreen(
                             color = TextPrimary
                         )
                         Text(
-                            text = "Restore data from server",
+                            text = "Restore data from a backup file",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary
                         )
@@ -431,7 +441,15 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 OutlinedButton(
-                    onClick = { viewModel.importBackup() },
+                    onClick = {
+                        activity?.launchImport { uri ->
+                            val ctx = activity.applicationContext
+                            val json = ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                            if (json != null) {
+                                viewModel.importFromJson(json)
+                            }
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
@@ -441,7 +459,7 @@ fun SettingsScreen(
                 ) {
                     Icon(Icons.Filled.CloudDownload, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Import Backup")
+                    Text("Import from File")
                 }
 
                 if (lastBackupDate > 0) {

@@ -120,30 +120,62 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun getExportJson(): String {
+        Log.d(TAG, "getExportJson")
+        val backupMap = mapOf(
+            "play_history" to (prefs.getString("play_history", "") ?: ""),
+            "recent_searches" to (prefs.getStringSet("recent_searches", emptySet())?.joinToString("|") ?: ""),
+            "server_url" to (_serverUrl.value),
+            "audio_quality" to (_audioQuality.value),
+            "crossfade_enabled" to (_crossfadeEnabled.value),
+            "crossfade_duration" to (_crossfadeDuration.value),
+            "download_quality" to (_downloadQuality.value),
+            "download_wifi_only" to (_downloadWifiOnly.value)
+        )
+        return com.google.gson.Gson().toJson(backupMap)
+    }
+
+    fun onExportComplete() {
+        Log.d(TAG, "onExportComplete")
+        _lastBackupDate.value = System.currentTimeMillis()
+        prefs.edit().putLong("last_backup_date", _lastBackupDate.value).apply()
+    }
+
+    fun importFromJson(json: String) {
+        Log.d(TAG, "importFromJson: parsing JSON")
+        viewModelScope.launch {
+            try {
+                val type = object : com.google.gson.reflect.TypeToken<Map<String, String>>() {}.type
+                val backupMap: Map<String, String> = com.google.gson.Gson().fromJson(json, type)
+                val editor = prefs.edit()
+                backupMap["play_history"]?.let { editor.putString("play_history", it) }
+                backupMap["server_url"]?.let { editor.putString("server_url", it); _serverUrl.value = it }
+                backupMap["audio_quality"]?.let { editor.putString("audio_quality", it); _audioQuality.value = it }
+                backupMap["crossfade_enabled"]?.let { editor.putBoolean("crossfade_enabled", it.toBoolean()); _crossfadeEnabled.value = it.toBoolean() }
+                backupMap["crossfade_duration"]?.let { editor.putFloat("crossfade_duration", it.toFloat()); _crossfadeDuration.value = it.toFloat() }
+                backupMap["download_quality"]?.let { editor.putString("download_quality", it); _downloadQuality.value = it }
+                backupMap["download_wifi_only"]?.let { editor.putBoolean("download_wifi_only", it.toBoolean()); _downloadWifiOnly.value = it.toBoolean() }
+                backupMap["recent_searches"]?.let { recent ->
+                    val set = recent.split("|").filter { it.isNotBlank() }.toSet()
+                    editor.putStringSet("recent_searches", set)
+                }
+                editor.apply()
+                _lastBackupDate.value = System.currentTimeMillis()
+                prefs.edit().putLong("last_backup_date", _lastBackupDate.value).apply()
+                Log.d(TAG, "importFromJson: success, restored ${backupMap.size} keys")
+            } catch (e: Exception) {
+                Log.e(TAG, "importFromJson failed", e)
+            }
+        }
+    }
+
     fun importBackup() {
         Log.d(TAG, "importBackup: restoring from local backup")
         viewModelScope.launch {
             try {
                 val json = prefs.getString("local_backup", null)
                 if (json != null) {
-                    val type = object : com.google.gson.reflect.TypeToken<Map<String, String>>() {}.type
-                    val backupMap: Map<String, String> = com.google.gson.Gson().fromJson(json, type)
-                    val editor = prefs.edit()
-                    backupMap["play_history"]?.let { editor.putString("play_history", it) }
-                    backupMap["server_url"]?.let { editor.putString("server_url", it); _serverUrl.value = it }
-                    backupMap["audio_quality"]?.let { editor.putString("audio_quality", it); _audioQuality.value = it }
-                    backupMap["crossfade_enabled"]?.let { editor.putBoolean("crossfade_enabled", it.toBoolean()); _crossfadeEnabled.value = it.toBoolean() }
-                    backupMap["crossfade_duration"]?.let { editor.putFloat("crossfade_duration", it.toFloat()); _crossfadeDuration.value = it.toFloat() }
-                    backupMap["download_quality"]?.let { editor.putString("download_quality", it); _downloadQuality.value = it }
-                    backupMap["download_wifi_only"]?.let { editor.putBoolean("download_wifi_only", it.toBoolean()); _downloadWifiOnly.value = it.toBoolean() }
-                    backupMap["recent_searches"]?.let { recent ->
-                        val set = recent.split("|").filter { it.isNotBlank() }.toSet()
-                        editor.putStringSet("recent_searches", set)
-                    }
-                    editor.apply()
-                    _lastBackupDate.value = System.currentTimeMillis()
-                    prefs.edit().putLong("last_backup_date", _lastBackupDate.value).apply()
-                    Log.d(TAG, "importBackup: success, restored ${backupMap.size} keys")
+                    importFromJson(json)
                 } else {
                     Log.w(TAG, "importBackup: no local backup found")
                 }

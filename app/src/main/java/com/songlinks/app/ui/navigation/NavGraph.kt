@@ -125,7 +125,7 @@ private fun playSongFromNav(
 }
 
 @Composable
-fun SongLinksNavGraph(playerService: PlayerService? = null) {
+fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songlinks.app.MainActivity? = null) {
     val navController = rememberNavController()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var isPlayerExpanded by remember { mutableStateOf(false) }
@@ -288,7 +288,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null) {
                 )
             }
             composable("settings") {
-                SettingsScreen(playerService = playerService)
+                SettingsScreen(playerService = playerService, activity = activity)
             }
         }
 

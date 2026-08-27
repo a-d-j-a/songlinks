@@ -2,6 +2,7 @@ package com.songlinks.app.ui.screens.search
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.songlinks.app.api.SongApi
@@ -14,6 +15,8 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+
+private const val TAG = "SearchViewModel"
 
 @OptIn(FlowPreview::class)
 class SearchViewModel(application: Application) : AndroidViewModel(application) {
@@ -76,7 +79,12 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
             _results.value = searchResults
             saveToRecent(searchQuery)
         } catch (e: Exception) {
-            _error.value = e.message ?: "Search failed"
+            Log.e(TAG, "Search failed", e)
+            _error.value = when {
+                e.message?.contains("connect", true) == true || e.message?.contains("timeout", true) == true ->
+                    "Cannot reach server. Make sure it's running and check the server URL in Settings."
+                else -> e.message ?: "Search failed"
+            }
         } finally {
             _isLoading.value = false
         }
