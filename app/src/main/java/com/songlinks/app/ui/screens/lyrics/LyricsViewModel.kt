@@ -36,30 +36,44 @@ class LyricsViewModel(application: Application) : AndroidViewModel(application) 
         Log.d(TAG, "init")
     }
 
+    private var fetchJob: kotlinx.coroutines.Job? = null
+    private val lrcRegex = Regex("""\[(\d+):(\d+\.?\d*)\]\s*(.*)""")
+
     fun fetchLyrics(title: String, artist: String) {
+        if (title.isBlank() || artist.isBlank()) {
+            _error.value = "Missing title or artist"
+            return
+        }
+        fetchJob?.cancel()
         Log.d(TAG, "fetchLyrics: title=$title, artist=$artist")
-        viewModelScope.launch {
+        fetchJob = viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
             _lyricsText.value = null
             _syncedLines.value = emptyList()
             _hasSyncedLyrics.value = false
+            _currentLineIndex.value = -1
 
             try {
                 val response = DirectApi.getLyrics(title, artist)
-
-                if (response.lyrics.isNotBlank()) {
-                    _lyricsText.value = response.lyrics
-                    _hasSyncedLyrics.value = false
-                } else if (!response.syncedLyrics.isNullOrBlank()) {
+                if (!response.syncedLyrics.isNullOrBlank()) {
                     val lines = parseSyncedLyrics(response.syncedLyrics)
-                    _syncedLines.value = lines
-                    _hasSyncedLyrics.value = true
-                    _lyricsText.value = lines.joinToString("\n") { it.text }
+                    if (lines.isNotEmpty()) {
+                        _syncedLines.value = lines
+                        _hasSyncedLyrics.value = true
+                        _lyricsText.value = lines.joinToString("\n") { it.text }
+                    } else if (response.lyrics.isNotBlank()) {
+                        _lyricsText.value = response.lyrics
+                    } else {
+                        _error.value = "No lyrics found"
+                    }
+                } else if (response.lyrics.isNotBlank()) {
+                    _lyricsText.value = response.lyrics
                 } else {
                     _error.value = "No lyrics found"
                 }
-            } catch (e: Exception) {
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) {
                 _error.value = e.message ?: "Failed to fetch lyrics"
             } finally {
                 _isLoading.value = false
@@ -70,32 +84,35 @@ class LyricsViewModel(application: Application) : AndroidViewModel(application) 
     private fun parseSyncedLyrics(syncedLyrics: String): List<SyncedLine> {
         val lines = mutableListOf<SyncedLine>()
         for (line in syncedLyrics.lines()) {
-            val match = Regex("""\[(\d+):(\d+\.?\d*)\]\s*(.*)""").matchEntire(line.trim())
-            if (match != null) {
-                val minutes = match.groupValues[1].toLongOrNull() ?: 0L
-                val seconds = match.groupValues[2].toDoubleOrNull() ?: 0.0
-                val text = match.groupValues[3]
-                val timeMs = (minutes * 60 * 1000 + (seconds * 1000).toLong())
-                lines.add(SyncedLine(timeMs = timeMs, text = text))
-            }
+            val match = lrcRegex.matchEntire(line.trim()) ?: continue
+            val minutes = match.groupValues[1].toLongOrNull() ?: 0L
+            val seconds = match.groupValues[2].toDoubleOrNull() ?: 0.0
+            val text = match.groupValues[3]
+            val timeMs = (minutes * 60 * 1000 + (seconds * 1000).toLong())
+            lines.add(SyncedLine(timeMs = timeMs, text = text))
         }
         return lines
     }
 
     fun updateCurrentPosition(positionMs: Long) {
-        Log.d(TAG, "updateCurrentPosition: $positionMs")
         val lines = _syncedLines.value
         if (lines.isEmpty()) return
-
+        // Binary search for last line where timeMs <= positionMs
+        var low = 0
+        var high = lines.size - 1
         var index = -1
-        for (i in lines.indices) {
-            if (positionMs >= lines[i].timeMs) {
-                index = i
+        while (low <= high) {
+            val mid = (low + high) ushr 1
+            if (positionMs >= lines[mid].timeMs) {
+                index = mid
+                low = mid + 1
             } else {
-                break
+                high = mid - 1
             }
         }
-        _currentLineIndex.value = index
+        if (_currentLineIndex.value != index) {
+            _currentLineIndex.value = index
+        }
     }
 }
 

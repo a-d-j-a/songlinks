@@ -50,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -73,10 +74,12 @@ fun HomeScreen(
         Log.d("HomeScreen", "Composing HomeScreen")
     }
 
-    val greeting = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
-        in 6..11 -> "Good morning"
-        in 12..17 -> "Good afternoon"
-        else -> "Good evening"
+    val greeting = remember {
+        when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
+            in 6..11 -> "Good morning"
+            in 12..17 -> "Good afternoon"
+            else -> "Good evening"
+        }
     }
 
     LazyColumn(
@@ -175,18 +178,21 @@ fun HomeScreen(
                         name = "iTunes",
                         icon = Icons.Filled.MusicNote,
                         color = com.songlinks.app.ui.theme.SourceiTunes,
+                        onClick = { onSearch("itunes") },
                         modifier = Modifier.weight(1f)
                     )
                     QuickLinkCard(
                         name = "JioSaavn",
                         icon = Icons.Filled.QueueMusic,
                         color = com.songlinks.app.ui.theme.SourceJioSaavn,
+                        onClick = { onSearch("jiosaavn") },
                         modifier = Modifier.weight(1f)
                     )
                     QuickLinkCard(
                         name = "YouTube",
                         icon = Icons.Filled.PlayCircleOutline,
                         color = com.songlinks.app.ui.theme.SourceYT,
+                        onClick = { onSearch("youtube") },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -195,19 +201,21 @@ fun HomeScreen(
     }
 }
 
+private data class CardData(val title: String, val icon: ImageVector, val gradient: Brush, val query: String)
+
 @Composable
 private fun QuickAccessGrid(
     onCardTap: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    data class CardData(val title: String, val icon: ImageVector, val gradient: Brush, val query: String)
-
-    val cards = listOf(
-        CardData("Trending", Icons.Filled.TrendingUp, Brush.linearGradient(listOf(Color(0xFFFF416C), Color(0xFFFF4B2B))), "trending"),
-        CardData("New Releases", Icons.Filled.NewReleases, Brush.linearGradient(listOf(Color(0xFF667EEA), Color(0xFF764BA2))), "new releases"),
-        CardData("Charts", Icons.Filled.Leaderboard, Brush.linearGradient(listOf(Color(0xFF11998E), Color(0xFF38EF7D))), "top charts"),
-        CardData("Discover", Icons.Filled.Explore, Brush.linearGradient(listOf(Color(0xFFDA22FF), Color(0xFF9733EE))), "discover")
-    )
+    val cards = remember {
+        listOf(
+            CardData("Trending", Icons.Filled.TrendingUp, Brush.linearGradient(listOf(Color(0xFFFF416C), Color(0xFFFF4B2B))), "trending"),
+            CardData("New Releases", Icons.Filled.NewReleases, Brush.linearGradient(listOf(Color(0xFF667EEA), Color(0xFF764BA2))), "new releases"),
+            CardData("Charts", Icons.Filled.Leaderboard, Brush.linearGradient(listOf(Color(0xFF11998E), Color(0xFF38EF7D))), "top charts"),
+            CardData("Discover", Icons.Filled.Explore, Brush.linearGradient(listOf(Color(0xFFDA22FF), Color(0xFF9733EE))), "discover")
+        )
+    }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
@@ -294,10 +302,11 @@ private fun QuickLinkCard(
     name: String,
     icon: ImageVector,
     color: Color,
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier,
+        modifier = modifier.let { if (onClick != null) it.clickable(onClick = onClick) else it },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = ThemeCard

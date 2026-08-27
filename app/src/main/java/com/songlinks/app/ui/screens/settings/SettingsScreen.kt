@@ -95,6 +95,8 @@ fun SettingsScreen(
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var showClearAllDialog by remember { mutableStateOf(false) }
     var sleepTimerMinutes by remember { mutableLongStateOf(0L) }
+    var customMinutes by remember { mutableStateOf("") }
+    val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()) }
 
     LazyColumn(
         modifier = Modifier
@@ -290,12 +292,16 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         val json = viewModel.getExportJson()
-                        activity?.launchExport { uri ->
-                            val ctx = activity.applicationContext
-                            ctx.contentResolver.openOutputStream(uri)?.use { out ->
-                                out.write(json.toByteArray())
+                        if (activity != null) {
+                            activity.launchExport { uri ->
+                                try {
+                                    val ctx = activity.applicationContext
+                                    ctx.contentResolver.openOutputStream(uri)?.use { out ->
+                                        out.write(json.toByteArray())
+                                    }
+                                    viewModel.onExportComplete()
+                                } catch (e: Exception) { android.util.Log.e("SettingsScreen", "export failed", e) }
                             }
-                            viewModel.onExportComplete()
                         }
                     },
                     modifier = Modifier
@@ -341,11 +347,15 @@ fun SettingsScreen(
 
                 OutlinedButton(
                     onClick = {
-                        activity?.launchImport { uri ->
-                            val ctx = activity.applicationContext
-                            val json = ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                            if (json != null) {
-                                viewModel.importFromJson(json)
+                        if (activity != null) {
+                            activity.launchImport { uri ->
+                                try {
+                                    val ctx = activity.applicationContext
+                                    val json = ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                                    if (json != null) {
+                                        viewModel.importFromJson(json)
+                                    }
+                                } catch (e: Exception) { android.util.Log.e("SettingsScreen", "import failed", e) }
                             }
                         }
                     },
@@ -363,8 +373,7 @@ fun SettingsScreen(
 
                 if (lastBackupDate > 0) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
-                    val dateStr = dateFormat.format(Date(lastBackupDate))
+                    val dateStr = remember(lastBackupDate) { dateFormat.format(Date(lastBackupDate)) }
                     SettingsInfoRow(
                         icon = Icons.Filled.Info,
                         title = "Last Backup",
@@ -450,8 +459,6 @@ fun SettingsScreen(
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    var customMinutes by remember { mutableStateOf("") }
-
                     OutlinedTextField(
                         value = customMinutes,
                         onValueChange = { customMinutes = it.filter { c -> c.isDigit() } },

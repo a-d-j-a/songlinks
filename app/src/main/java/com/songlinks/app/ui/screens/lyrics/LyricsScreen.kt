@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,7 +68,8 @@ fun LyricsScreen(
         viewModel.fetchLyrics(title, artist)
     }
 
-    LaunchedEffect(positionMs) {
+    // Position updates at 10+ Hz — call directly instead of LaunchedEffect per tick
+    androidx.compose.runtime.SideEffect {
         viewModel.updateCurrentPosition(positionMs)
     }
 
@@ -80,12 +82,14 @@ fun LyricsScreen(
 
     val listState = rememberLazyListState()
 
-    LaunchedEffect(currentLineIndex, hasSyncedLyrics) {
+    LaunchedEffect(currentLineIndex, hasSyncedLyrics, syncedLines.size) {
         if (hasSyncedLyrics && currentLineIndex >= 0 && currentLineIndex < syncedLines.size) {
-            listState.animateScrollToItem(
-                index = currentLineIndex,
-                scrollOffset = -200
-            )
+            try {
+                listState.animateScrollToItem(
+                    index = currentLineIndex,
+                    scrollOffset = -200
+                )
+            } catch (_: Exception) {}
         }
     }
 
@@ -188,15 +192,16 @@ fun LyricsScreen(
                         itemsIndexed(syncedLines, key = { _, s -> s.timeMs }) { index, line ->
                             val isActive = index == currentLineIndex
                             val isPast = index < currentLineIndex
-
-                            val textColor by animateColorAsState(
-                                targetValue = when {
-                                    isActive -> Accent
-                                    isPast -> TextSecondary.copy(alpha = 0.5f)
-                                    else -> TextPrimary.copy(alpha = 0.7f)
-                                },
-                                label = "lyrics_color"
-                            )
+                            val targetColor = when {
+                                isActive -> Accent
+                                isPast -> TextSecondary.copy(alpha = 0.5f)
+                                else -> TextPrimary.copy(alpha = 0.7f)
+                            }
+                            // Disable animation for non-active to avoid 50+ concurrent anims
+                            val textColor = if (isActive || isPast) {
+                                val animated by animateColorAsState(targetValue = targetColor, label = "lyrics_color_$index")
+                                animated
+                            } else targetColor
 
                             val fontSize = if (isActive) 24.sp else 18.sp
                             val fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
@@ -216,6 +221,7 @@ fun LyricsScreen(
                 }
 
                 lyricsText != null -> {
+                    val plainLines = remember(lyricsText) { lyricsText!!.split("\n") }
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
@@ -224,8 +230,7 @@ fun LyricsScreen(
                         ),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        val lines = lyricsText!!.split("\n")
-                        itemsIndexed(lines) { _, line ->
+                        itemsIndexed(plainLines, key = { idx, _ -> idx }) { _, line ->
                             Text(
                                 text = line.ifBlank { "\u00A0" },
                                 style = MaterialTheme.typography.bodyLarge,

@@ -77,34 +77,28 @@ fun ForYouScreen(
 
     val hasHistory = recentlyPlayed.isNotEmpty() || topArtists.isNotEmpty()
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Surface)
     ) {
+        TopAppBar(
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.AutoAwesome, null, tint = Accent, modifier = Modifier.size(28.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("For You")
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
+        )
+        if (isRefreshing) {
+            androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Accent)
+        }
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
-            item {
-                TopAppBar(
-                    title = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.AutoAwesome,
-                                contentDescription = null,
-                                tint = Accent,
-                                modifier = Modifier.size(28.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("For You")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Surface
-                    )
-                )
-            }
 
             if (!hasHistory && !isLoading) {
                 item {
