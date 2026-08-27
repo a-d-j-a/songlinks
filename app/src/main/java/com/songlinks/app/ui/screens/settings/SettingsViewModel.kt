@@ -5,7 +5,6 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.songlinks.app.api.SongApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,12 +15,6 @@ private const val TAG = "SettingsViewModel"
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences("songlinks_prefs", Context.MODE_PRIVATE)
-    private val api = SongApi(application)
-
-    private val _serverUrl = MutableStateFlow(
-        prefs.getString("server_url", "http://10.0.2.2:3000") ?: "http://10.0.2.2:3000"
-    )
-    val serverUrl: StateFlow<String> = _serverUrl.asStateFlow()
 
     private val _isDarkTheme = MutableStateFlow(prefs.getBoolean("dark_theme", true))
     val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
@@ -37,12 +30,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val _crossfadeDuration = MutableStateFlow(prefs.getFloat("crossfade_duration", 3f))
     val crossfadeDuration: StateFlow<Float> = _crossfadeDuration.asStateFlow()
 
-    private val _isTestingConnection = MutableStateFlow(false)
-    val isTestingConnection: StateFlow<Boolean> = _isTestingConnection.asStateFlow()
-
-    private val _connectionResult = MutableStateFlow<Boolean?>(null)
-    val connectionResult: StateFlow<Boolean?> = _connectionResult.asStateFlow()
-
     private val _downloadQuality = MutableStateFlow(
         prefs.getString("download_quality", "auto") ?: "auto"
     )
@@ -55,12 +42,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         prefs.getLong("last_backup_date", 0L)
     )
     val lastBackupDate: StateFlow<Long> = _lastBackupDate.asStateFlow()
-
-    fun updateServerUrl(url: String) {
-        Log.d(TAG, "updateServerUrl: $url")
-        _serverUrl.value = url
-        prefs.edit().putString("server_url", url).apply()
-    }
 
     fun toggleTheme() {
         _isDarkTheme.value = !_isDarkTheme.value
@@ -100,7 +81,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 val backupMap = mapOf(
                     "play_history" to (prefs.getString("play_history", "") ?: ""),
                     "recent_searches" to (prefs.getStringSet("recent_searches", emptySet())?.joinToString("|") ?: ""),
-                    "server_url" to (_serverUrl.value),
                     "audio_quality" to (_audioQuality.value),
                     "crossfade_enabled" to (_crossfadeEnabled.value),
                     "crossfade_duration" to (_crossfadeDuration.value),
@@ -125,7 +105,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         val backupMap = mapOf(
             "play_history" to (prefs.getString("play_history", "") ?: ""),
             "recent_searches" to (prefs.getStringSet("recent_searches", emptySet())?.joinToString("|") ?: ""),
-            "server_url" to (_serverUrl.value),
             "audio_quality" to (_audioQuality.value),
             "crossfade_enabled" to (_crossfadeEnabled.value),
             "crossfade_duration" to (_crossfadeDuration.value),
@@ -149,7 +128,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 val backupMap: Map<String, String> = com.google.gson.Gson().fromJson(json, type)
                 val editor = prefs.edit()
                 backupMap["play_history"]?.let { editor.putString("play_history", it) }
-                backupMap["server_url"]?.let { editor.putString("server_url", it); _serverUrl.value = it }
                 backupMap["audio_quality"]?.let { editor.putString("audio_quality", it); _audioQuality.value = it }
                 backupMap["crossfade_enabled"]?.let { editor.putBoolean("crossfade_enabled", it.toBoolean()); _crossfadeEnabled.value = it.toBoolean() }
                 backupMap["crossfade_duration"]?.let { editor.putFloat("crossfade_duration", it.toFloat()); _crossfadeDuration.value = it.toFloat() }
@@ -185,26 +163,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun testConnection() {
-        Log.d(TAG, "testConnection")
-        viewModelScope.launch {
-            _isTestingConnection.value = true
-            _connectionResult.value = null
-            try {
-                val result = api.checkHealth()
-                _connectionResult.value = result
-            } catch (e: Exception) {
-                _connectionResult.value = false
-            } finally {
-                _isTestingConnection.value = false
-            }
-        }
-    }
-
-    fun clearConnectionResult() {
-        _connectionResult.value = null
-    }
-
     fun clearHistory() {
         prefs.edit().remove("play_history").apply()
     }
@@ -212,7 +170,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun clearAllData() {
         Log.d(TAG, "clearAllData")
         prefs.edit().clear().apply()
-        _serverUrl.value = "http://10.0.2.2:3000"
         _isDarkTheme.value = true
         _audioQuality.value = "auto"
         _crossfadeEnabled.value = false

@@ -82,7 +82,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
             Log.e(TAG, "Search failed", e)
             _error.value = when {
                 e.message?.contains("connect", true) == true || e.message?.contains("timeout", true) == true ->
-                    "Cannot reach server. Make sure it's running and check the server URL in Settings."
+                    "Cannot reach network. Please check your internet connection."
                 else -> e.message ?: "Search failed"
             }
         } finally {

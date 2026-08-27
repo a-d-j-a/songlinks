@@ -2,32 +2,17 @@ package com.songlinks.app.ui.screens.lyrics
 
 import android.app.Application
 import android.util.Log
-import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.gson.Gson
-import com.google.gson.JsonParser
-import kotlinx.coroutines.Dispatchers
+import com.songlinks.app.api.DirectApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.net.URLEncoder
-import java.util.concurrent.TimeUnit
 
 private const val TAG = "LyricsViewModel"
 
 class LyricsViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .build()
-
-    private val gson = Gson()
 
     private val _lyricsText = MutableStateFlow<String?>(null)
     val lyricsText: StateFlow<String?> = _lyricsText.asStateFlow()
@@ -61,46 +46,16 @@ class LyricsViewModel(application: Application) : AndroidViewModel(application) 
             _hasSyncedLyrics.value = false
 
             try {
-                val baseUrl = getBaseUrl()
-                val encodedTitle = URLEncoder.encode(title, "UTF-8")
-                val encodedArtist = URLEncoder.encode(artist, "UTF-8")
-                val url = "$baseUrl/lyrics?title=$encodedTitle&artist=$encodedArtist"
+                val response = DirectApi.getLyrics(title, artist)
 
-                val request = Request.Builder()
-                    .url(url)
-                    .get()
-                    .build()
-
-                val responseBody = withContext(Dispatchers.IO) {
-                    client.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) {
-                            throw Exception("Server error: ${response.code}")
-                        }
-                        response.body?.string() ?: throw Exception("Empty response")
-                    }
-                }
-
-                val json = JsonParser.parseString(responseBody).asJsonObject
-                val plainLyrics = json.get("lyrics")?.asString
-                val syncedArray = json.getAsJsonArray("syncedLines")
-
-                if (syncedArray != null && syncedArray.size() > 0) {
-                    val lines = mutableListOf<SyncedLine>()
-                    for (element in syncedArray) {
-                        val obj = element.asJsonObject
-                        lines.add(
-                            SyncedLine(
-                                timeMs = obj.get("timeMs")?.asLong ?: 0L,
-                                text = obj.get("text")?.asString ?: ""
-                            )
-                        )
-                    }
+                if (response.lyrics.isNotBlank()) {
+                    _lyricsText.value = response.lyrics
+                    _hasSyncedLyrics.value = false
+                } else if (!response.syncedLyrics.isNullOrBlank()) {
+                    val lines = parseSyncedLyrics(response.syncedLyrics)
                     _syncedLines.value = lines
                     _hasSyncedLyrics.value = true
                     _lyricsText.value = lines.joinToString("\n") { it.text }
-                } else if (plainLyrics != null) {
-                    _lyricsText.value = plainLyrics
-                    _hasSyncedLyrics.value = false
                 } else {
                     _error.value = "No lyrics found"
                 }
@@ -110,6 +65,21 @@ class LyricsViewModel(application: Application) : AndroidViewModel(application) 
                 _isLoading.value = false
             }
         }
+    }
+
+    private fun parseSyncedLyrics(syncedLyrics: String): List<SyncedLine> {
+        val lines = mutableListOf<SyncedLine>()
+        for (line in syncedLyrics.lines()) {
+            val match = Regex("""\[(\d+):(\d+\.?\d*)\]\s*(.*)""").matchEntire(line.trim())
+            if (match != null) {
+                val minutes = match.groupValues[1].toLongOrNull() ?: 0L
+                val seconds = match.groupValues[2].toDoubleOrNull() ?: 0.0
+                val text = match.groupValues[3]
+                val timeMs = (minutes * 60 * 1000 + (seconds * 1000).toLong())
+                lines.add(SyncedLine(timeMs = timeMs, text = text))
+            }
+        }
+        return lines
     }
 
     fun updateCurrentPosition(positionMs: Long) {
@@ -126,14 +96,6 @@ class LyricsViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
         _currentLineIndex.value = index
-    }
-
-    private fun getBaseUrl(): String {
-        val prefs = getApplication<Application>().getSharedPreferences(
-            "songlinks_prefs", Context.MODE_PRIVATE
-        )
-        return prefs.getString("server_url", "http://10.0.2.2:3000")
-            ?: "http://10.0.2.2:3000"
     }
 }
 

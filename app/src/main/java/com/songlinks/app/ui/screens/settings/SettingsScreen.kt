@@ -18,14 +18,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.HighQuality
@@ -38,7 +35,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -60,11 +56,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -77,8 +71,6 @@ import com.songlinks.app.ui.theme.Surface
 import com.songlinks.app.ui.theme.SurfaceVariant
 import com.songlinks.app.ui.theme.TextPrimary
 import com.songlinks.app.ui.theme.TextSecondary
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -91,13 +83,10 @@ fun SettingsScreen(
     playerService: com.songlinks.app.player.PlayerService? = null,
     activity: com.songlinks.app.MainActivity? = null
 ) {
-    val serverUrl by viewModel.serverUrl.collectAsState()
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
     val audioQuality by viewModel.audioQuality.collectAsState()
     val crossfadeEnabled by viewModel.crossfadeEnabled.collectAsState()
     val crossfadeDuration by viewModel.crossfadeDuration.collectAsState()
-    val isTestingConnection by viewModel.isTestingConnection.collectAsState()
-    val connectionResult by viewModel.connectionResult.collectAsState()
     val downloadQuality by viewModel.downloadQuality.collectAsState()
     val downloadWifiOnly by viewModel.downloadWifiOnly.collectAsState()
     val lastBackupDate by viewModel.lastBackupDate.collectAsState()
@@ -106,7 +95,6 @@ fun SettingsScreen(
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var showClearAllDialog by remember { mutableStateOf(false) }
     var sleepTimerMinutes by remember { mutableLongStateOf(0L) }
-    val scope = rememberCoroutineScope()
 
     LazyColumn(
         modifier = Modifier
@@ -121,95 +109,6 @@ fun SettingsScreen(
                     containerColor = Surface
                 )
             )
-        }
-
-        item {
-            SettingsSection(title = "SERVER") {
-                OutlinedTextField(
-                    value = serverUrl,
-                    onValueChange = { viewModel.updateServerUrl(it) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    label = { Text("Server URL") },
-                    leadingIcon = {
-                        Icon(Icons.Filled.Dns, contentDescription = null)
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Accent,
-                        unfocusedBorderColor = CardBorder,
-                        focusedContainerColor = SurfaceVariant,
-                        unfocusedContainerColor = SurfaceVariant,
-                        cursorColor = Accent,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        focusedLabelColor = Accent,
-                        unfocusedLabelColor = OnSurfaceVariant
-                    )
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Button(
-                    onClick = { viewModel.testConnection() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    enabled = !isTestingConnection,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Accent
-                    )
-                ) {
-                    if (isTestingConnection) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    Text(
-                        if (isTestingConnection) "Testing..." else "Test Connection",
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-
-                AnimatedVisibility(visible = connectionResult != null) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (connectionResult == true)
-                                Color(0xFF1B5E20).copy(alpha = 0.2f)
-                            else
-                                Color(0xFFB71C1C).copy(alpha = 0.2f)
-                        )
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = if (connectionResult == true)
-                                    Icons.Filled.CheckCircle
-                                else Icons.Filled.Error,
-                                contentDescription = null,
-                                tint = if (connectionResult == true) Color(0xFF4CAF50) else Color(0xFFF44336)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (connectionResult == true) "Connected!" else "Connection failed",
-                                color = if (connectionResult == true) Color(0xFF4CAF50) else Color(0xFFF44336)
-                            )
-                        }
-                    }
-                }
-            }
         }
 
         item {
