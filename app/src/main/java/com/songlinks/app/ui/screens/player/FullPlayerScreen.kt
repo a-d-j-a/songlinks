@@ -1,6 +1,8 @@
 package com.songlinks.app.ui.screens.player
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -36,13 +38,14 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.ShuffleOn
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,10 +53,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -77,212 +83,355 @@ fun FullPlayerScreen(
     val isPlaying by PlayerState.isPlaying.collectAsState()
     val position by PlayerState.position.collectAsState()
     val duration by PlayerState.duration.collectAsState()
-    val context = androidx.compose.ui.platform.LocalContext.current
     val queue by PlayerState.queue.collectAsState()
     val shuffleEnabled by PlayerState.shuffle.collectAsState()
     val repeatMode by PlayerState.repeatMode.collectAsState()
     val currentIndex by PlayerState.currentIndex.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     var showQueue by remember { mutableStateOf(false) }
     var isFavorite by remember(currentSong?.id) { mutableStateOf(false) }
-    var seekPosition by remember { mutableStateOf(0f) }
     var isSeeking by remember { mutableStateOf(false) }
-
+    var seekPos by remember { mutableStateOf(0f) }
     val song = currentSong
+
+    val rotation by animateFloatAsState(targetValue = if (isPlaying) 360f else 0f, label = "artRotation")
 
     BackHandler { onDismiss() }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Color(0xFF0D0D0D), Color(0xFF1A1A2E), Color(0xFF0D0D0D))))
-            .padding(top = 8.dp, bottom = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(Color(0xFF0A0A0A))
     ) {
-        // Top bar — large tappable down arrow
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Default.KeyboardArrowDown, "Close", tint = OnSurfaceDark, modifier = Modifier.size(32.dp))
-            }
-            Spacer(Modifier.weight(1f))
-            if (!song?.source.isNullOrBlank()) {
-                val c = when (song?.source?.lowercase()) {
-                    "itunes" -> SourceiTunes; "jiosaavn" -> SourceJioSaavn
-                    "ytmusic", "youtube" -> SourceYT; else -> PrimaryDark
-                }
-                Box(Modifier.clip(RoundedCornerShape(8.dp)).background(c.copy(alpha = 0.15f)).padding(horizontal = 8.dp, vertical = 3.dp)) {
-                    Text(song!!.source.uppercase(), color = c, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                }
-                Spacer(Modifier.width(12.dp))
-            }
-        }
-
-        // Album art — capped size, centered, 1:1
-        Box(
-            modifier = Modifier.weight(1f, fill = true).fillMaxWidth().padding(horizontal = 32.dp, vertical = 8.dp),
-            contentAlignment = Alignment.Center
-        ) {
+        // Blurred background from cover
+        if (!song?.cover.isNullOrBlank()) {
+            AsyncImage(
+                model = song?.cover,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(24.dp)
+                    .alpha(0.35f)
+            )
             Box(
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f).heightIn(max = 300.dp).clip(RoundedCornerShape(20.dp))
-                    .shadow(20.dp, RoundedCornerShape(20.dp), ambientColor = PrimaryDark.copy(alpha = 0.2f), spotColor = PrimaryDark.copy(alpha = 0.25f))
-            ) {
-                if (!song?.cover.isNullOrBlank()) {
-                    AsyncImage(
-                        model = song?.cover, contentDescription = "Album Art", contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp))
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color(0xFF0A0A0A).copy(alpha = 0.2f),
+                                Color(0xFF0A0A0A).copy(alpha = 0.85f),
+                                Color(0xFF0A0A0A)
+                            )
+                        )
                     )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(GradientStart, GradientEnd))),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.MusicNote, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(64.dp))
-                    }
-                }
-            }
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Brush.verticalGradient(listOf(Color(0xFF1A1A2E), Color(0xFF0A0A0A))))
+            )
         }
 
-        // Song info — always visible
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 8.dp, bottom = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                song?.title ?: "Not Playing", color = OnSurfaceDark, fontSize = 19.sp, fontWeight = FontWeight.Bold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                song?.artist ?: "Unknown Artist", color = OnSurfaceVariantDark, fontSize = 14.sp,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        // Seek bar — compact
-        val progress = if (isSeeking) seekPosition else if (duration > 0) (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f) else 0f
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-            Slider(
-                value = progress,
-                onValueChange = { isSeeking = true; seekPosition = it },
-                onValueChangeFinished = { isSeeking = false; playerService?.seekTo((seekPosition * duration).toLong()) },
-                valueRange = 0f..1f,
-                colors = SliderDefaults.colors(thumbColor = PrimaryDark, activeTrackColor = PrimaryDark, inactiveTrackColor = SeekBarTrack),
-                modifier = Modifier.fillMaxWidth().height(28.dp)
-            )
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                val displayPos = if (isSeeking) (seekPosition * duration).toLong() else position
-                Text(formatDuration(displayPos), color = OnSurfaceVariantDark, fontSize = 11.sp)
-                Text(formatDuration(duration), color = OnSurfaceVariantDark, fontSize = 11.sp)
-            }
-        }
-
-        Spacer(Modifier.height(6.dp))
-
-        // Main controls
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            ControlBtn(if (shuffleEnabled) Icons.Default.ShuffleOn else Icons.Default.Shuffle, if (shuffleEnabled) ActiveControlColor else ControlButtonColor, 22.dp) { PlayerState.toggleShuffle() }
-            ControlBtn(Icons.Default.SkipPrevious, OnSurfaceDark, 30.dp) { playerService?.skipToPrevious() }
-            Box(
-                modifier = Modifier.size(60.dp).clip(CircleShape).background(PrimaryDark)
-                    .clickable(remember { MutableInteractionSource() }, indication = null) {
-                        if (isPlaying) playerService?.pause() else playerService?.resume()
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = OnPrimaryDark, modifier = Modifier.size(32.dp))
-            }
-            ControlBtn(Icons.Default.SkipNext, OnSurfaceDark, 30.dp) { playerService?.skipToNext() }
-            ControlBtn(when (repeatMode) { 2 -> Icons.Default.RepeatOne; else -> Icons.Default.Repeat }, if (repeatMode != 0) ActiveControlColor else ControlButtonColor, 22.dp) { PlayerState.cycleRepeat() }
-        }
-
-        Spacer(Modifier.height(6.dp))
-
-        // Extra controls — smaller row
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            IconButton(onClick = { isFavorite = !isFavorite }, modifier = Modifier.size(36.dp)) {
-                Icon(if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Favorite", tint = if (isFavorite) FavoriteRed else ControlButtonColor, modifier = Modifier.size(18.dp))
-            }
-            IconButton(onClick = {
-                val s = currentSong
-                if (s != null) {
-                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                        type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, "${s.title} - ${s.artist}\n${s.pageUrl}")
-                    }
-                    try { context.startActivity(android.content.Intent.createChooser(intent, "Share song")) } catch (_: Exception) {}
-                }
-            }, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.Share, "Share", tint = ControlButtonColor, modifier = Modifier.size(18.dp))
-            }
-            IconButton(onClick = { showQueue = !showQueue }, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.QueueMusic, "Queue", tint = if (showQueue) ActiveControlColor else ControlButtonColor, modifier = Modifier.size(18.dp))
-            }
-            IconButton(onClick = {
-                val s = currentSong
-                if (s != null) onNavigateToLyrics(java.net.URLEncoder.encode(s.title, "UTF-8"), java.net.URLEncoder.encode(s.artist, "UTF-8"))
-            }, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.MusicNote, "Lyrics", tint = ControlButtonColor, modifier = Modifier.size(18.dp))
-            }
-        }
-
-        if (showQueue) {
-            QueuePanel(queue = queue, currentIndex = currentIndex, onSongClick = { idx -> playerService?.setQueueAndPlay(queue, idx) })
-        }
-    }
-}
-
-@Composable
-private fun ControlBtn(icon: ImageVector, tint: Color, iconSize: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(iconSize))
-    }
-}
-
-@Composable
-private fun QueuePanel(queue: List<SongResult>, currentIndex: Int, onSongClick: (Int) -> Unit) {
-    if (queue.isEmpty()) return
-    LazyColumn(
-        modifier = Modifier.fillMaxWidth().heightIn(max = 140.dp).padding(horizontal = 16.dp, vertical = 4.dp)
-    ) {
-        itemsIndexed(queue, key = { _, s -> s.id }) { index, song ->
-            val isCurrent = index == currentIndex
+            // Top bar — large hit area
             Row(
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                    .background(if (isCurrent) PrimaryDark.copy(alpha = 0.12f) else Color.Transparent)
-                    .clickable { onSongClick(index) }.padding(horizontal = 8.dp, vertical = 7.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (!song.cover.isNullOrBlank()) {
-                    AsyncImage(model = song.cover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)))
-                } else {
-                    Box(Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)).background(GradientStart.copy(alpha = 0.3f)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.MusicNote, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Close",
+                        tint = Color.White,
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("PLAYING FROM", color = Color.White.copy(alpha = 0.6f), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Text(
+                        when (song?.source?.lowercase()) {
+                            "itunes" -> "iTunes"
+                            "jiosaavn" -> "JioSaavn"
+                            "ytmusic", "youtube" -> "YouTube Music"
+                            else -> "SongLinks"
+                        },
+                        color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Box(modifier = Modifier.size(48.dp)) // balance
+            }
+
+            // Album art — premium card with play state rotation hint
+            Box(
+                modifier = Modifier
+                    .weight(1f, fill = true)
+                    .fillMaxWidth()
+                    .padding(horizontal = 28.dp, vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .heightIn(max = 340.dp)
+                        .shadow(28.dp, RoundedCornerShape(16.dp), ambientColor = Color.Black.copy(alpha = 0.5f), spotColor = PrimaryDark.copy(alpha = 0.3f))
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF1E1E1E))
+                        .graphicsLayer { rotationZ = if (isPlaying) rotation else 0f }
+                ) {
+                    if (!song?.cover.isNullOrBlank()) {
+                        AsyncImage(
+                            model = song?.cover,
+                            contentDescription = "Album Art",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(16.dp))
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(GradientStart, GradientEnd))),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.MusicNote, null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(72.dp))
+                        }
+                    }
+                    // Subtle play indicator
+                    if (!isPlaying) {
+                        Box(
+                            modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier.size(64.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(36.dp))
+                            }
+                        }
                     }
                 }
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(song.title, color = if (isCurrent) PrimaryDark else OnSurfaceDark, fontSize = 12.sp, fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(song.artist, color = OnSurfaceVariantDark, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+
+            // Song info — centered, marquee-style
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    song?.title ?: "Not Playing",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    song?.artist ?: "Unknown Artist",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (!song?.album.isNullOrBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        song?.album ?: "",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
-                if (isCurrent) Box(Modifier.size(6.dp).clip(CircleShape).background(PrimaryDark))
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Seek bar — custom thumb, buffered
+            val progress = if (isSeeking) seekPos else if (duration > 0) (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f) else 0f
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                Slider(
+                    value = progress,
+                    onValueChange = { isSeeking = true; seekPos = it },
+                    onValueChangeFinished = { isSeeking = false; playerService?.seekTo((seekPos * duration).toLong()) },
+                    valueRange = 0f..1f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color.White,
+                        activeTrackColor = Color.White,
+                        inactiveTrackColor = Color.White.copy(alpha = 0.25f)
+                    ),
+                    modifier = Modifier.fillMaxWidth().height(24.dp)
+                )
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    val displayPos = if (isSeeking) (seekPos * duration).toLong() else position
+                    Text(formatDuration(displayPos), color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    Text(formatDuration(duration), color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // Main controls — large, accessible
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                IconButton(onClick = { PlayerState.toggleShuffle() }, modifier = Modifier.size(44.dp)) {
+                    Icon(
+                        if (shuffleEnabled) Icons.Default.ShuffleOn else Icons.Default.Shuffle,
+                        "Shuffle", tint = if (shuffleEnabled) Accent else Color.White.copy(alpha = 0.7f), modifier = Modifier.size(22.dp)
+                    )
+                }
+                IconButton(onClick = { playerService?.skipToPrevious() }, modifier = Modifier.size(52.dp)) {
+                    Icon(Icons.Default.SkipPrevious, "Prev", tint = Color.White, modifier = Modifier.size(36.dp))
+                }
+                Box(
+                    modifier = Modifier
+                        .size(68.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            if (isPlaying) playerService?.pause() else playerService?.resume()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AnimatedContent(targetState = isPlaying, label = "playPause") { playing ->
+                        Icon(
+                            if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            null, tint = Color.Black, modifier = Modifier.size(36.dp)
+                        )
+                    }
+                }
+                IconButton(onClick = { playerService?.skipToNext() }, modifier = Modifier.size(52.dp)) {
+                    Icon(Icons.Default.SkipNext, "Next", tint = Color.White, modifier = Modifier.size(36.dp))
+                }
+                IconButton(onClick = { PlayerState.cycleRepeat() }, modifier = Modifier.size(44.dp)) {
+                    Icon(
+                        when (repeatMode) { 2 -> Icons.Default.RepeatOne; else -> Icons.Default.Repeat },
+                        "Repeat", tint = if (repeatMode != 0) Accent else Color.White.copy(alpha = 0.7f), modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Secondary actions — glass pill row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color.White.copy(alpha = 0.08f))
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                SmallAction(Icons.Default.FavoriteBorder, "Fav", isFavorite, FavoriteRed, Color.White.copy(alpha = 0.7f), isFavorite) { isFavorite = !isFavorite }
+                SmallAction(Icons.Default.Share, "Share", false, Color.White, Color.White.copy(alpha = 0.7f), false) {
+                    val s = currentSong; if (s != null) {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, "${s.title} - ${s.artist}\n${s.pageUrl}")
+                        }
+                        try { context.startActivity(android.content.Intent.createChooser(intent, "Share")) } catch (_: Exception) {}
+                    }
+                }
+                SmallAction(Icons.Default.QueueMusic, "Queue", showQueue, Accent, Color.White.copy(alpha = 0.7f), showQueue) { showQueue = !showQueue }
+                SmallAction(Icons.Default.MusicNote, "Lyrics", false, Accent, Color.White.copy(alpha = 0.7f), false) {
+                    val s = currentSong; if (s != null) onNavigateToLyrics(java.net.URLEncoder.encode(s.title, "UTF-8"), java.net.URLEncoder.encode(s.artist, "UTF-8"))
+                }
+            }
+
+            // Queue sheet — collapsible, not scroll-through
+            if (showQueue) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .heightIn(max = 160.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E).copy(alpha = 0.95f))
+                ) {
+                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Up Next • ${queue.size}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                            Text("${currentIndex + 1}/${queue.size}", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
+                        }
+                        LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                            itemsIndexed(queue, key = { _, s -> s.id }) { idx, song ->
+                                val isCurrent = idx == currentIndex
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isCurrent) Accent.copy(alpha = 0.12f) else Color.Transparent)
+                                        .clickable { playerService?.setQueueAndPlay(queue, idx) }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    AsyncImage(
+                                        model = song.cover, contentDescription = null, contentScale = ContentScale.Crop,
+                                        modifier = Modifier.size(36.dp).clip(RoundedCornerShape(6.dp))
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(song.title, color = if (isCurrent) Accent else Color.White, fontSize = 13.sp, fontWeight = if (isCurrent) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(song.artist, color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    if (isCurrent) Box(Modifier.size(6.dp).clip(CircleShape).background(Accent))
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun SmallAction(
+    icon: ImageVector,
+    desc: String,
+    active: Boolean,
+    activeTint: Color,
+    inactiveTint: Color,
+    isActive: Boolean,
+    onClick: () -> Unit
+) {
+    IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
+        Icon(icon, desc, tint = if (isActive) activeTint else inactiveTint, modifier = Modifier.size(18.dp))
     }
 }
 
 private fun formatDuration(ms: Long): String {
     val s = ms / 1000
-    return "%d:%02d".format(s / 60, s % 60)
+    val m = s / 60
+    val sec = s % 60
+    return "%d:%02d".format(m, sec)
 }

@@ -96,9 +96,32 @@ object YtmusicSource {
 
         val json = JsonParser.parseString(body).asJsonObject
         val allItems = collectMusicItems(json)
-        Log.d(TAG, "searchWithParams() found ${allItems.size} musicResponsiveListItemRenderer items")
+        val videoItems = collectVideoItems(json)
+        Log.d(TAG, "searchWithParams() found ${allItems.size} music items and ${videoItems.size} video items")
 
         val songs = mutableListOf<SongResult>()
+        // Handle videoRenderer for audio-from-videos (when song filter yields 0, videos become available)
+        for (vItem in videoItems) {
+            try {
+                val videoId = vItem.get("videoId")?.asString ?: continue
+                if (videoId.isBlank()) continue
+                val titleRuns = vItem.getAsJsonObject("title")?.getAsJsonArray("runs")
+                val title = titleRuns?.joinToString("") { it.asJsonObject.get("text")?.asString ?: "" } ?: vItem.get("title")?.asString ?: ""
+                if (title.isBlank()) continue
+                val ownerRuns = vItem.getAsJsonObject("ownerText")?.getAsJsonArray("runs")
+                val artist = ownerRuns?.joinToString("") { it.asJsonObject.get("text")?.asString ?: "" } ?: vItem.getAsJsonObject("longBylineText")?.getAsJsonArray("runs")?.joinToString("") { it.asJsonObject.get("text")?.asString ?: "" } ?: ""
+                val durationText = vItem.getAsJsonObject("lengthText")?.get("simpleText")?.asString
+                    ?: vItem.getAsJsonObject("lengthText")?.getAsJsonArray("runs")?.firstOrNull()?.asJsonObject?.get("text")?.asString ?: "0:00"
+                val durationSec = parseDuration(durationText)
+                val thumbs = vItem.getAsJsonObject("thumbnail")?.getAsJsonArray("thumbnails")
+                var coverUrl = ""
+                if (thumbs != null && thumbs.size() > 0) coverUrl = thumbs[thumbs.size() - 1].asJsonObject.get("url")?.asString ?: ""
+                if (coverUrl.isNotBlank() && !coverUrl.startsWith("http")) coverUrl = "https:$coverUrl"
+                // Deduplicate if already added via music item
+                if (songs.any { it.id == "ytmusic_$videoId" }) continue
+                songs.add(SongResult(source="ytmusic", id="ytmusic_$videoId", title=title, artist=artist.ifBlank { "YouTube" }, album="", duration=durationSec*1000, cover=coverUrl, page="$YT_BASE/watch?v=$videoId", streams=emptyList(), quality="AAC", streamUrl=""))
+            } catch (_: Exception) { continue }
+        }
         for (item in allItems) {
             val columns = item.getAsJsonArray("flexColumns") ?: continue
             if (columns.size() == 0) continue
@@ -398,6 +421,29 @@ object YtmusicSource {
                     for (item in element.asJsonArray) {
                         if (item.isJsonObject) {
                             result.addAll(collectMusicItems(item.asJsonObject))
+                        }
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+    private fun collectVideoItems(obj: com.google.gson.JsonObject): List<com.google.gson.JsonObject> {
+        val result = mutableListOf<com.google.gson.JsonObject>()
+        for (key in obj.keySet()) {
+            val element = obj.get(key) ?: continue
+            when {
+                key == "videoRenderer" -> {
+                    result.add(element.asJsonObject)
+                }
+                element.isJsonObject -> {
+                    result.addAll(collectVideoItems(element.asJsonObject))
+                }
+                element.isJsonArray -> {
+                    for (item in element.asJsonArray) {
+                        if (item.isJsonObject) {
+                            result.addAll(collectVideoItems(item.asJsonObject))
                         }
                     }
                 }

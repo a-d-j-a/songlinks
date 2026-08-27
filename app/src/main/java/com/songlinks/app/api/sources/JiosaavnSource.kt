@@ -48,9 +48,22 @@ object JiosaavnSource {
     }
 
     suspend fun search(query: String, limit: Int = 10): List<SongResult> {
+        // Primary: search.getResults gives full encrypted_media_url (320kbps), autocomplete only gives preview vlink
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
-        val url = "$JIOSAAVN_API?__call=autocomplete.get&cc=in&includeMetaTags=1&query=$encodedQuery"
-        Log.d(TAG, "search() URL: $url")
+        val primaryUrl = "$JIOSAAVN_API?__call=search.getResults&cc=in&_format=json&_marker=0&api_version=4&includeMetaTags=1&q=$encodedQuery&p=1&n=$limit"
+        val fallbackUrl = "$JIOSAAVN_API?__call=autocomplete.get&cc=in&includeMetaTags=1&query=$encodedQuery"
+        Log.d(TAG, "search() primary URL: $primaryUrl")
+        val primaryResult = searchWithUrl(primaryUrl, limit)
+        if (primaryResult.isNotEmpty() && primaryResult.any { it.streamUrl.isNotBlank() && it.quality != "preview" }) {
+            return primaryResult
+        }
+        Log.d(TAG, "search() primary gave ${primaryResult.size} with no full stream, trying autocomplete fallback")
+        val fallback = searchWithUrl(fallbackUrl, limit)
+        return if (fallback.isNotEmpty()) fallback else primaryResult
+    }
+
+    private suspend fun searchWithUrl(url: String, limit: Int): List<SongResult> {
+        Log.d(TAG, "searchWithUrl() URL: $url")
 
         val request = Request.Builder()
             .url(url)
@@ -112,7 +125,8 @@ object JiosaavnSource {
                                     }
                                 }
 
-                                val encryptedUrl = obj.get("encrypted_media_url")?.asString ?: ""
+                                val encryptedUrl = obj.get("encrypted_media_url")?.asString
+                                    ?: moreInfo?.get("encrypted_media_url")?.asString ?: ""
                                 var streamUrl = ""
                                 var quality = ""
                                 if (encryptedUrl.isNotBlank()) {
