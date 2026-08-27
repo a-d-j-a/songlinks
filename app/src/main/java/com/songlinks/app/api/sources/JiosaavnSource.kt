@@ -5,6 +5,7 @@ import com.google.gson.JsonParser
 import com.songlinks.app.api.SongResult
 import com.songlinks.app.api.Stream
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
@@ -143,6 +144,46 @@ object JiosaavnSource {
                     }
                 }
             })
+        }
+    }
+
+    suspend fun getStreamUrl(songId: String): String = withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            val encodedId = URLEncoder.encode(songId, "UTF-8")
+            val url = "$JIOSAAVN_API?__call=song.get&cc=in&includeMediaTags=1&songId=$encodedId"
+            Log.d(TAG, "getStreamUrl() URL: $url")
+
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                .get()
+                .build()
+
+            val response = client.newCall(request).execute()
+            val body = response.body?.string() ?: ""
+            response.close()
+
+            if (!response.isSuccessful) {
+                Log.e(TAG, "getStreamUrl() HTTP ${response.code}")
+                return@withContext ""
+            }
+
+            val json = JsonParser.parseString(body).asJsonObject
+            val encryptedUrl = json.get("encrypted_media_url")?.asString ?: ""
+
+            if (encryptedUrl.isNotBlank()) {
+                val decrypted = decryptDesEcb(encryptedUrl)
+                if (decrypted.isNotBlank() && decrypted.startsWith("http")) {
+                    Log.d(TAG, "getStreamUrl() success for songId=$songId")
+                    return@withContext decrypted
+                }
+            }
+
+            Log.w(TAG, "getStreamUrl() no stream URL for songId=$songId")
+            ""
+        } catch (e: Exception) {
+            Log.e(TAG, "getStreamUrl() error for songId=$songId", e)
+            ""
         }
     }
 }

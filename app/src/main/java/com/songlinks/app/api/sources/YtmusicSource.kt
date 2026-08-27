@@ -3,7 +3,6 @@ package com.songlinks.app.api.sources
 import android.util.Log
 import com.google.gson.JsonParser
 import com.songlinks.app.api.SongResult
-import com.songlinks.app.api.Stream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -27,128 +26,136 @@ object YtmusicSource {
 
     suspend fun search(query: String, limit: Int = 10): List<SongResult> = withContext(Dispatchers.IO) {
         try {
-            val payload = """{
-                "context": {
-                    "client": {
-                        "clientName": "WEB_REMIX",
-                        "clientVersion": "1.20231030.00.00",
-                        "hl": "en",
-                        "gl": "US"
-                    }
-                },
-                "query": "$query",
-                "params": "EgWKAQIIAWoKEAMQBBAJEAoQBQ%3D%3D"
-            }"""
-
-            val request = Request.Builder()
-                .url("$YT_INNERTUBE_BASE/search?key=$YT_INNERTUBE_KEY")
-                .header("User-Agent", MOBILE_UA)
-                .header("Content-Type", "application/json")
-                .header("Origin", YT_BASE)
-                .header("Referer", "$YT_BASE/")
-                .post(payload.toRequestBody("application/json".toMediaType()))
-                .build()
-
-            val response = client.newCall(request).execute()
-            val body = response.body?.string() ?: ""
-            response.close()
-
-            Log.d(TAG, "search() response code: ${response.code}, body length: ${body.length}")
-
-            if (!response.isSuccessful) {
-                Log.e(TAG, "search() HTTP ${response.code}")
-                return@withContext emptyList()
+            var results = searchWithParams(query, limit, "EgWKAQIIAWoKEAMQBBAJEAoQBQ%3D%3D")
+            if (results.isEmpty()) {
+                Log.d(TAG, "search() with song filter returned 0, trying without filter")
+                results = searchWithParams(query, limit, "")
             }
-
-            val json = JsonParser.parseString(body).asJsonObject
-
-            val allItems = collectMusicItems(json)
-            Log.d(TAG, "search() found ${allItems.size} musicResponsiveListItemRenderer items")
-
-            val songs = mutableListOf<SongResult>()
-            for (item in allItems) {
-                val columns = item.getAsJsonArray("flexColumns") ?: continue
-
-                val videoId = columns[0].asJsonObject
-                    ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                    ?.getAsJsonArray("runs")
-                    ?.mapNotNull { it.asJsonObject }
-                    ?.firstOrNull { r ->
-                        r.getAsJsonObject("navigationEndpoint")?.has("watchEndpoint") == true
-                    }
-                    ?.getAsJsonObject("navigationEndpoint")
-                    ?.getAsJsonObject("watchEndpoint")
-                    ?.get("videoId")?.asString ?: ""
-
-                if (videoId.isBlank()) continue
-
-                val titleRuns = columns[0].asJsonObject
-                    ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                    ?.getAsJsonArray("runs")
-                val title = titleRuns
-                    ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
-
-                if (title.isBlank()) continue
-
-                val artistRuns = if (columns.size() > 1)
-                    columns[1].asJsonObject
-                        ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                        ?.getAsJsonArray("runs")
-                else null
-                val artist = artistRuns
-                    ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
-
-                val albumRuns = if (columns.size() > 2)
-                    columns[2].asJsonObject
-                        ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                        ?.getAsJsonArray("runs")
-                else null
-                val album = albumRuns
-                    ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
-
-                val durationText = columns.lastOrNull()?.asJsonObject
-                    ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                    ?.getAsJsonArray("runs")
-                    ?.firstOrNull()?.asJsonObject
-                    ?.get("text")?.asString ?: "0:00"
-                val durationSec = parseDuration(durationText)
-
-                val thumbnails = item.getAsJsonObject("thumbnail")
-                    ?.getAsJsonObject("musicThumbnailRenderer")
-                    ?.getAsJsonObject("thumbnail")
-                    ?.getAsJsonArray("thumbnails")
-                var coverUrl = ""
-                if (thumbnails != null && thumbnails.size() > 0) {
-                    coverUrl = thumbnails[thumbnails.size() - 1].asJsonObject.get("url")?.asString ?: ""
-                    if (coverUrl.isNotBlank() && !coverUrl.startsWith("http")) {
-                        coverUrl = "https:$coverUrl"
-                    }
-                }
-
-                songs.add(
-                    SongResult(
-                        source = "ytmusic",
-                        id = "ytmusic_$videoId",
-                        title = title,
-                        artist = artist,
-                        album = album,
-                        duration = durationSec * 1000,
-                        cover = coverUrl,
-                        page = "$YT_BASE/watch?v=$videoId",
-                        streams = emptyList(),
-                        quality = "AAC",
-                        streamUrl = ""
-                    )
-                )
-            }
-
-            val result = songs.take(limit)
-            Log.d(TAG, "search() returning ${result.size} songs")
-            result
+            results
         } catch (e: Exception) {
             Log.e(TAG, "search() error", e)
             emptyList()
         }
+    }
+
+    private fun searchWithParams(query: String, limit: Int, params: String): List<SongResult> {
+        val paramsBlock = if (params.isNotBlank()) """, "params": "$params"""" else ""
+        val payload = """{
+            "context": {
+                "client": {
+                    "clientName": "WEB_REMIX",
+                    "clientVersion": "1.20231030.00.00",
+                    "hl": "en",
+                    "gl": "US"
+                }
+            },
+            "query": "$query"$paramsBlock
+        }"""
+
+        val request = Request.Builder()
+            .url("$YT_INNERTUBE_BASE/search?key=$YT_INNERTUBE_KEY")
+            .header("User-Agent", MOBILE_UA)
+            .header("Content-Type", "application/json")
+            .header("Origin", YT_BASE)
+            .header("Referer", "$YT_BASE/")
+            .post(payload.toRequestBody("application/json".toMediaType()))
+            .build()
+
+        val response = client.newCall(request).execute()
+        val body = response.body?.string() ?: ""
+        response.close()
+
+        Log.d(TAG, "searchWithParams() HTTP ${response.code}, body ${body.length} chars, params='${params.take(20)}...'")
+
+        if (!response.isSuccessful) {
+            Log.e(TAG, "searchWithParams() HTTP ${response.code}")
+            return emptyList()
+        }
+
+        val json = JsonParser.parseString(body).asJsonObject
+        val allItems = collectMusicItems(json)
+        Log.d(TAG, "searchWithParams() found ${allItems.size} musicResponsiveListItemRenderer items")
+
+        val songs = mutableListOf<SongResult>()
+        for (item in allItems) {
+            val columns = item.getAsJsonArray("flexColumns") ?: continue
+
+            val videoId = columns[0].asJsonObject
+                ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
+                ?.getAsJsonArray("runs")
+                ?.mapNotNull { it.asJsonObject }
+                ?.firstOrNull { r ->
+                    r.getAsJsonObject("navigationEndpoint")?.has("watchEndpoint") == true
+                }
+                ?.getAsJsonObject("navigationEndpoint")
+                ?.getAsJsonObject("watchEndpoint")
+                ?.get("videoId")?.asString ?: ""
+
+            if (videoId.isBlank()) continue
+
+            val titleRuns = columns[0].asJsonObject
+                ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
+                ?.getAsJsonArray("runs")
+            val title = titleRuns
+                ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
+
+            if (title.isBlank()) continue
+
+            val artistRuns = if (columns.size() > 1)
+                columns[1].asJsonObject
+                    ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
+                    ?.getAsJsonArray("runs")
+            else null
+            val artist = artistRuns
+                ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
+
+            val albumRuns = if (columns.size() > 2)
+                columns[2].asJsonObject
+                    ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
+                    ?.getAsJsonArray("runs")
+            else null
+            val album = albumRuns
+                ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
+
+            val durationText = columns.lastOrNull()?.asJsonObject
+                ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
+                ?.getAsJsonArray("runs")
+                ?.firstOrNull()?.asJsonObject
+                ?.get("text")?.asString ?: "0:00"
+            val durationSec = parseDuration(durationText)
+
+            val thumbnails = item.getAsJsonObject("thumbnail")
+                ?.getAsJsonObject("musicThumbnailRenderer")
+                ?.getAsJsonObject("thumbnail")
+                ?.getAsJsonArray("thumbnails")
+            var coverUrl = ""
+            if (thumbnails != null && thumbnails.size() > 0) {
+                coverUrl = thumbnails[thumbnails.size() - 1].asJsonObject.get("url")?.asString ?: ""
+                if (coverUrl.isNotBlank() && !coverUrl.startsWith("http")) {
+                    coverUrl = "https:$coverUrl"
+                }
+            }
+
+            songs.add(
+                SongResult(
+                    source = "ytmusic",
+                    id = "ytmusic_$videoId",
+                    title = title,
+                    artist = artist,
+                    album = album,
+                    duration = durationSec * 1000,
+                    cover = coverUrl,
+                    page = "$YT_BASE/watch?v=$videoId",
+                    streams = emptyList(),
+                    quality = "AAC",
+                    streamUrl = ""
+                )
+            )
+        }
+
+        val result = songs.take(limit)
+        Log.d(TAG, "searchWithParams() returning ${result.size} songs")
+        return result
     }
 
     suspend fun getStreamUrl(videoId: String): String = withContext(Dispatchers.IO) {

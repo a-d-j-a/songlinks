@@ -56,6 +56,10 @@ object DirectApi {
                     val videoId = songId.removePrefix("ytmusic_")
                     YtmusicSource.getStreamUrl(videoId)
                 }
+                songId.startsWith("jiosaavn_") -> {
+                    val id = songId.removePrefix("jiosaavn_")
+                    JiosaavnSource.getStreamUrl(id)
+                }
                 songId.startsWith("itunes_") -> {
                     val trackId = songId.removePrefix("itunes_")
                     val results = ItunesSource.search(trackId, 1)
@@ -103,7 +107,6 @@ object DirectApi {
     }
 
     suspend fun checkHealth(): Boolean {
-        // No server to check — always healthy
         return true
     }
 }
