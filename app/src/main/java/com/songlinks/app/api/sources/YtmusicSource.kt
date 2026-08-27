@@ -38,7 +38,12 @@ object YtmusicSource {
         }
     }
 
+    private fun jsonEscape(s: String): String {
+        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+    }
+
     private fun searchWithParams(query: String, limit: Int, params: String): List<SongResult> {
+        val safeQuery = jsonEscape(query)
         val paramsBlock = if (params.isNotBlank()) """, "params": "$params"""" else ""
         val payload = """{
             "context": {
@@ -49,7 +54,7 @@ object YtmusicSource {
                     "gl": "US"
                 }
             },
-            "query": "$query"$paramsBlock
+            "query": "$safeQuery"$paramsBlock
         }"""
 
         val request = Request.Builder()
@@ -166,13 +171,14 @@ object YtmusicSource {
             Triple("WEB_REMIX", "1.20231030.00.00", MOBILE_UA)
         )
 
+        val safeVideoId = jsonEscape(videoId)
         for ((clientName, clientVersion, userAgent) in clients) {
             try {
                 val sdk = if (clientName.startsWith("ANDROID")) 30 else 0
                 val payload = buildString {
                     append("""{"context":{"client":{"clientName":"$clientName","clientVersion":"$clientVersion","hl":"en","gl":"US"""")
                     if (sdk > 0) append(""","androidSdkVersion":$sdk""")
-                    append("""}},"videoId":"$videoId","contentCheckOk":true,"racyCheckOk":true}""")
+                    append("""}},"videoId":"$safeVideoId","contentCheckOk":true,"racyCheckOk":true}""")
                 }
 
                 val request = Request.Builder()

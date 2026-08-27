@@ -50,13 +50,14 @@ object ItunesSource {
 
                 override fun onResponse(call: Call, response: Response) {
                     try {
+                        val body = response.body?.string() ?: ""
+                        val code = response.code
+                        response.close()
                         if (!response.isSuccessful) {
-                            Log.e(TAG, "search() HTTP ${response.code}")
+                            Log.e(TAG, "search() HTTP $code")
                             if (continuation.isActive) continuation.resume(emptyList())
                             return
                         }
-
-                        val body = response.body?.string() ?: ""
                         val json = JsonParser.parseString(body).asJsonObject
                         val results = json.getAsJsonArray("results") ?: run {
                             if (continuation.isActive) continuation.resume(emptyList())
@@ -100,6 +101,7 @@ object ItunesSource {
                         if (continuation.isActive) continuation.resume(songs)
                     } catch (e: Exception) {
                         Log.e(TAG, "search() parse error", e)
+                        try { response.close() } catch (_: Exception) {}
                         if (continuation.isActive) continuation.resume(emptyList())
                     }
                 }

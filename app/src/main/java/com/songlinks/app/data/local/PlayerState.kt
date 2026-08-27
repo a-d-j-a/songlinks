@@ -36,15 +36,19 @@ object PlayerState {
         _currentSong.value = song
         _isPlaying.value = true
         _position.value = 0L
-        _duration.value = (song.duration ?: 0).toLong() * 1000L
+        _duration.value = (song.duration ?: 0).toLong()
     }
 
     fun playQueue(songs: List<SongResult>, startIndex: Int = 0) {
-        _queue.value = songs
-        _currentIndex.value = startIndex
-        if (songs.isNotEmpty() && startIndex in songs.indices) {
-            playSong(songs[startIndex])
+        if (songs.isEmpty()) {
+            _queue.value = emptyList()
+            _currentIndex.value = -1
+            return
         }
+        val safeIndex = startIndex.coerceIn(songs.indices)
+        _queue.value = songs
+        _currentIndex.value = safeIndex
+        playSong(songs[safeIndex])
     }
 
     fun togglePlay() {
@@ -117,7 +121,12 @@ object PlayerState {
     }
 
     fun seekTo(positionMs: Long) {
-        _position.value = positionMs.coerceIn(0L, _duration.value)
+        val dur = _duration.value
+        _position.value = if (dur > 0) positionMs.coerceIn(0L, dur) else positionMs.coerceAtLeast(0L)
+    }
+
+    fun setPlaying(playing: Boolean) {
+        _isPlaying.value = playing
     }
 
     fun toggleShuffle() {
@@ -130,7 +139,10 @@ object PlayerState {
 
     fun setQueue(songs: List<SongResult>, startIndex: Int = 0) {
         _queue.value = songs
-        _currentIndex.value = startIndex
+        _currentIndex.value = if (songs.isEmpty()) -1 else startIndex.coerceIn(songs.indices)
+        if (songs.isNotEmpty() && startIndex in songs.indices) {
+            _currentSong.value = songs[startIndex]
+        }
     }
 
     fun updatePosition(positionMs: Long) {

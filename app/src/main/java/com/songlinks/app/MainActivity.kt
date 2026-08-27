@@ -31,10 +31,14 @@ class MainActivity : ComponentActivity() {
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
-            val binder = service as PlayerService.PlayerBinder
-            playerService.value = binder.getService()
-            bound = true
-            Log.d(TAG, "Service bound")
+            val binder = service as? PlayerService.PlayerBinder
+            if (binder != null) {
+                playerService.value = binder.getService()
+                bound = true
+                Log.d(TAG, "Service bound")
+            } else {
+                Log.e(TAG, "Service connected with wrong binder")
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
@@ -105,7 +109,11 @@ class MainActivity : ComponentActivity() {
         }
 
         val serviceIntent = Intent(this, PlayerService::class.java)
-        startService(serviceIntent)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent)
+        } else {
+            startService(serviceIntent)
+        }
         bindService(serviceIntent, connection, Context.BIND_AUTO_CREATE)
 
         val prefs = getSharedPreferences("songlinks_prefs", Context.MODE_PRIVATE)

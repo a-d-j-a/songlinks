@@ -11,23 +11,17 @@ class SongApi(private val context: Context) {
 
     suspend fun search(query: String, sources: Set<String>): List<SongResult> {
         Log.d(TAG, "search() query=$query, sources=$sources")
-        return withContext(Dispatchers.IO) {
-            DirectApi.search(query, sources)
-        }
+        return DirectApi.search(query, sources)
     }
 
     suspend fun resolveStreamUrl(songId: String): String {
         Log.d(TAG, "resolveStreamUrl() id=$songId")
-        return withContext(Dispatchers.IO) {
-            DirectApi.resolveStreamUrl(songId)
-        }
+        return DirectApi.resolveStreamUrl(songId)
     }
 
     suspend fun getLyrics(title: String, artist: String): LyricsResponse {
         Log.d(TAG, "getLyrics() title=$title, artist=$artist")
-        return withContext(Dispatchers.IO) {
-            DirectApi.getLyrics(title, artist)
-        }
+        return DirectApi.getLyrics(title, artist)
     }
 
     suspend fun getBackupData(): BackupData {

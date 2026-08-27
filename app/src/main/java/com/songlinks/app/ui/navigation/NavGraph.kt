@@ -98,27 +98,40 @@ private fun playSongFromNav(
     context: Context
 ) {
     Log.d(TAG, "playSongFromNav: ${song.title} by ${song.artist} (source: ${song.source}, id: ${song.id})")
-    PlayerState.playSong(song)
     val url = song.streams.firstOrNull()?.url ?: song.streamUrl
     if (url.isNotBlank()) {
         Log.d(TAG, "Playing directly: ${url.take(80)}")
-        playerService?.play(url, song.title, song.artist)
+        PlayerState.playSong(song)
+        if (playerService != null) {
+            playerService.play(url, song.title, song.artist)
+        } else {
+            Log.w(TAG, "playerService is null, cannot play")
+        }
     } else {
-        Log.d(TAG, "Stream URL empty, resolving via /stream endpoint for id: ${song.id}")
+        Log.d(TAG, "Stream URL empty, resolving for id: ${song.id}")
+        PlayerState.playSong(song)
         scope.launch(Dispatchers.IO) {
             try {
                 val api = SongApi(context)
                 val resolvedUrl = api.resolveStreamUrl(song.id)
                 Log.d(TAG, "Resolved URL: ${resolvedUrl.take(80)}")
                 if (resolvedUrl.isNotBlank()) {
+                    val updatedSong = song.copy(streams = listOf(com.songlinks.app.api.Stream(quality = song.quality.ifBlank { "AAC" }, url = resolvedUrl)), streamUrl = resolvedUrl)
                     withContext(Dispatchers.Main) {
-                        playerService?.play(resolvedUrl, song.title, song.artist)
+                        PlayerState.playSong(updatedSong)
+                        if (playerService != null) {
+                            playerService.play(resolvedUrl, song.title, song.artist)
+                        } else {
+                            Log.e(TAG, "playerService null after resolve")
+                        }
                     }
                 } else {
                     Log.e(TAG, "Could not resolve stream URL for ${song.id}")
+                    withContext(Dispatchers.Main) { PlayerState.setPlaying(false) }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error resolving stream URL for ${song.id}", e)
+                withContext(Dispatchers.Main) { PlayerState.setPlaying(false) }
             }
         }
     }
@@ -128,7 +141,7 @@ private fun playSongFromNav(
 fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songlinks.app.MainActivity? = null) {
     val navController = rememberNavController()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    var isPlayerExpanded by remember { mutableStateOf(false) }
+    var isPlayerExpanded by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -162,7 +175,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
                     tonalElevation = 0.dp
                 ) {
                     bottomNavItems.forEachIndexed { index, item ->
-                        val isSelected = currentRoute == item.route
+                        val isSelected = currentRoute == item.route || (item.route == "search" && currentRoute?.startsWith("search") == true)
                         NavigationBarItem(
                             icon = {
                                 Icon(
@@ -239,7 +252,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
                     initialQuery = query,
                     onSongClick = { song -> playSongFromNav(playerService, song, coroutineScope, context) },
                     onOpenInBrowser = { url ->
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (e: Exception) { Log.e(TAG, "open browser failed", e) }
                     }
                 )
             }
@@ -248,7 +261,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
                     initialQuery = "",
                     onSongClick = { song -> playSongFromNav(playerService, song, coroutineScope, context) },
                     onOpenInBrowser = { url ->
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (e: Exception) { Log.e(TAG, "open browser failed", e) }
                     }
                 )
             }
@@ -256,7 +269,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
                 LibraryScreen(
                     onSongClick = { song -> playSongFromNav(playerService, song, coroutineScope, context) },
                     onOpenInBrowser = { url ->
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (e: Exception) { Log.e(TAG, "open browser failed", e) }
                     }
                 )
             }
@@ -271,16 +284,16 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
                 )
             }
             composable(
-                route = "lyrics/{title}/{artist}",
+                route = "lyrics?title={title}&artist={artist}",
                 arguments = listOf(
-                    navArgument("title") { type = NavType.StringType },
-                    navArgument("artist") { type = NavType.StringType }
+                    navArgument("title") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("artist") { type = NavType.StringType; defaultValue = "" }
                 )
             ) { backStackEntry ->
                 val encodedTitle = backStackEntry.arguments?.getString("title") ?: ""
                 val encodedArtist = backStackEntry.arguments?.getString("artist") ?: ""
-                val title = URLDecoder.decode(encodedTitle, "UTF-8")
-                val artist = URLDecoder.decode(encodedArtist, "UTF-8")
+                val title = try { URLDecoder.decode(encodedTitle, "UTF-8") } catch (_: Exception) { encodedTitle }
+                val artist = try { URLDecoder.decode(encodedArtist, "UTF-8") } catch (_: Exception) { encodedArtist }
                 LyricsScreen(
                     title = title,
                     artist = artist,
@@ -300,7 +313,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
                     isPlayerExpanded = false
                 },
                 onNavigateToLyrics = { encodedTitle, encodedArtist ->
-                    navController.navigate("lyrics/$encodedTitle/$encodedArtist")
+                    navController.navigate("lyrics?title=$encodedTitle&artist=$encodedArtist")
                 },
                 playerService = playerService
             )

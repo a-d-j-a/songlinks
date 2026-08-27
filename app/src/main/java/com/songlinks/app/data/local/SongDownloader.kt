@@ -13,29 +13,54 @@ class SongDownloader(
     private val client: OkHttpClient,
     private val downloadDao: DownloadDao
 ) {
+    private val appContext = context.applicationContext
+
+    private fun sanitizeFileName(name: String): String {
+        return name.replace(Regex("[^a-zA-Z0-9._-]"), "_").take(100)
+    }
 
     suspend fun downloadSong(song: SongResult, streamUrl: String): DownloadEntity =
         withContext(Dispatchers.IO) {
-            val downloadsDir = File(context.filesDir, "downloads")
+            val downloadsDir = File(appContext.filesDir, "downloads")
             if (!downloadsDir.exists()) {
-                downloadsDir.mkdirs()
+                if (!downloadsDir.mkdirs() && !downloadsDir.exists()) {
+                    throw Exception("Failed to create downloads directory")
+                }
             }
 
-            val extension = "mp3"
-            val fileName = "${song.source}_${song.id}.$extension"
+            val safeId = sanitizeFileName(song.id)
+            val safeSource = sanitizeFileName(song.source)
+            val fileName = "${safeSource}_${safeId}.mp3"
             val file = File(downloadsDir, fileName)
+            val tmpFile = File(downloadsDir, "$fileName.tmp")
 
             val request = Request.Builder().url(streamUrl).build()
             val response = client.newCall(request).execute()
 
             if (!response.isSuccessful) {
+                response.close()
                 throw Exception("Download failed: ${response.code}")
             }
 
-            response.body?.byteStream()?.use { input ->
-                file.outputStream().use { output ->
-                    input.copyTo(output)
+            val body = response.body ?: run { response.close(); throw Exception("Empty response") }
+            try {
+                body.byteStream().use { input ->
+                    tmpFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
                 }
+                if (tmpFile.length() == 0L) {
+                    tmpFile.delete()
+                    throw Exception("Downloaded file is empty")
+                }
+                if (file.exists()) file.delete()
+                if (!tmpFile.renameTo(file)) {
+                    tmpFile.copyTo(file, overwrite = true)
+                    tmpFile.delete()
+                }
+            } finally {
+                response.close()
+                if (tmpFile.exists() && tmpFile != file) tmpFile.delete()
             }
 
             val entity = DownloadEntity(
@@ -51,7 +76,12 @@ class SongDownloader(
                 fileSize = file.length()
             )
 
-            downloadDao.insert(entity)
+            try {
+                downloadDao.insert(entity)
+            } catch (e: Exception) {
+                file.delete()
+                throw e
+            }
             entity
         }
 }

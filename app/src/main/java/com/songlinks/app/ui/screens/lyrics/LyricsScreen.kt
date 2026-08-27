@@ -185,7 +185,7 @@ fun LyricsScreen(
                         ),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        itemsIndexed(syncedLines) { index, line ->
+                        itemsIndexed(syncedLines, key = { _, s -> s.timeMs }) { index, line ->
                             val isActive = index == currentLineIndex
                             val isPast = index < currentLineIndex
 

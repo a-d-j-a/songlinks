@@ -5,10 +5,15 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import com.songlinks.app.SongLinksApp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val TAG = "SettingsViewModel"
 
@@ -74,44 +79,40 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         prefs.edit().putBoolean("download_wifi_only", _downloadWifiOnly.value).apply()
     }
 
+    private fun buildBackupMap(): Map<String, String> {
+        val recentJson = prefs.getString("recent_searches_json", null)
+            ?: prefs.getStringSet("recent_searches", null)?.let { Gson().toJson(it.toList()) } ?: "[]"
+        return mapOf(
+            "play_history" to (prefs.getString("play_history", "") ?: ""),
+            "recent_searches_json" to recentJson,
+            "audio_quality" to _audioQuality.value,
+            "crossfade_enabled" to _crossfadeEnabled.value.toString(),
+            "crossfade_duration" to _crossfadeDuration.value.toString(),
+            "download_quality" to _downloadQuality.value,
+            "download_wifi_only" to _downloadWifiOnly.value.toString(),
+            "dark_theme" to _isDarkTheme.value.toString()
+        )
+    }
+
     fun exportBackup() {
         Log.d(TAG, "exportBackup: saving local data to SharedPreferences backup")
         viewModelScope.launch {
             try {
-                val backupMap = mapOf(
-                    "play_history" to (prefs.getString("play_history", "") ?: ""),
-                    "recent_searches" to (prefs.getStringSet("recent_searches", emptySet())?.joinToString("|") ?: ""),
-                    "audio_quality" to (_audioQuality.value),
-                    "crossfade_enabled" to (_crossfadeEnabled.value),
-                    "crossfade_duration" to (_crossfadeDuration.value),
-                    "download_quality" to (_downloadQuality.value),
-                    "download_wifi_only" to (_downloadWifiOnly.value)
-                )
-                val json = com.google.gson.Gson().toJson(backupMap)
+                val backupMap = buildBackupMap()
+                val json = Gson().toJson(backupMap)
                 prefs.edit().putString("local_backup", json).apply()
                 _lastBackupDate.value = System.currentTimeMillis()
                 prefs.edit().putLong("last_backup_date", _lastBackupDate.value).apply()
                 Log.d(TAG, "exportBackup: success, timestamp=${_lastBackupDate.value}")
             } catch (e: Exception) {
                 Log.e(TAG, "exportBackup failed", e)
-                _lastBackupDate.value = System.currentTimeMillis()
-                prefs.edit().putLong("last_backup_date", _lastBackupDate.value).apply()
             }
         }
     }
 
     fun getExportJson(): String {
         Log.d(TAG, "getExportJson")
-        val backupMap = mapOf(
-            "play_history" to (prefs.getString("play_history", "") ?: ""),
-            "recent_searches" to (prefs.getStringSet("recent_searches", emptySet())?.joinToString("|") ?: ""),
-            "audio_quality" to (_audioQuality.value),
-            "crossfade_enabled" to (_crossfadeEnabled.value),
-            "crossfade_duration" to (_crossfadeDuration.value),
-            "download_quality" to (_downloadQuality.value),
-            "download_wifi_only" to (_downloadWifiOnly.value)
-        )
-        return com.google.gson.Gson().toJson(backupMap)
+        return Gson().toJson(buildBackupMap())
     }
 
     fun onExportComplete() {
@@ -124,18 +125,29 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         Log.d(TAG, "importFromJson: parsing JSON")
         viewModelScope.launch {
             try {
-                val type = object : com.google.gson.reflect.TypeToken<Map<String, String>>() {}.type
-                val backupMap: Map<String, String> = com.google.gson.Gson().fromJson(json, type)
+                val type = object : TypeToken<Map<String, String>>() {}.type
+                val backupMap: Map<String, String> = Gson().fromJson(json, type) ?: emptyMap()
                 val editor = prefs.edit()
                 backupMap["play_history"]?.let { editor.putString("play_history", it) }
                 backupMap["audio_quality"]?.let { editor.putString("audio_quality", it); _audioQuality.value = it }
-                backupMap["crossfade_enabled"]?.let { editor.putBoolean("crossfade_enabled", it.toBoolean()); _crossfadeEnabled.value = it.toBoolean() }
-                backupMap["crossfade_duration"]?.let { editor.putFloat("crossfade_duration", it.toFloat()); _crossfadeDuration.value = it.toFloat() }
+                backupMap["crossfade_enabled"]?.let { runCatching { it.toBooleanStrict() }.getOrDefault(it.toBoolean()); editor.putBoolean("crossfade_enabled", it.toBoolean()); _crossfadeEnabled.value = it.toBoolean() }
+                backupMap["crossfade_duration"]?.let { runCatching { it.toFloat() }.getOrNull()?.let { f -> editor.putFloat("crossfade_duration", f); _crossfadeDuration.value = f } }
                 backupMap["download_quality"]?.let { editor.putString("download_quality", it); _downloadQuality.value = it }
                 backupMap["download_wifi_only"]?.let { editor.putBoolean("download_wifi_only", it.toBoolean()); _downloadWifiOnly.value = it.toBoolean() }
-                backupMap["recent_searches"]?.let { recent ->
-                    val set = recent.split("|").filter { it.isNotBlank() }.toSet()
-                    editor.putStringSet("recent_searches", set)
+                backupMap["dark_theme"]?.let { editor.putBoolean("dark_theme", it.toBoolean()); _isDarkTheme.value = it.toBoolean() }
+                // Recent searches: prefer json, fallback pipe
+                val recentJson = backupMap["recent_searches_json"] ?: backupMap["recent_searches"]
+                recentJson?.let { raw ->
+                    try {
+                        if (raw.trim().startsWith("[")) {
+                            editor.putString("recent_searches_json", raw)
+                            editor.remove("recent_searches")
+                        } else {
+                            val set = raw.split("|").filter { it.isNotBlank() }
+                            editor.putString("recent_searches_json", Gson().toJson(set))
+                            editor.remove("recent_searches")
+                        }
+                    } catch (_: Exception) {}
                 }
                 editor.apply()
                 _lastBackupDate.value = System.currentTimeMillis()
@@ -169,13 +181,31 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun clearAllData() {
         Log.d(TAG, "clearAllData")
-        prefs.edit().clear().apply()
-        _isDarkTheme.value = true
-        _audioQuality.value = "auto"
-        _crossfadeEnabled.value = false
-        _crossfadeDuration.value = 3f
-        _downloadQuality.value = "auto"
-        _downloadWifiOnly.value = true
-        _lastBackupDate.value = 0L
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val app = getApplication<Application>() as SongLinksApp
+                withContext(Dispatchers.IO) {
+                    app.database.songDao().deleteAll()
+                    app.database.downloadDao().deleteAll()
+                    // delete playlists via dao
+                    val playlists = app.database.playlistDao().getAllPlaylists()
+                    // Use direct queries for bulk delete
+                    app.database.clearAllTables()
+                }
+                // Clear files
+                val dlDir = java.io.File(getApplication<Application>().filesDir, "downloads")
+                if (dlDir.exists()) dlDir.deleteRecursively()
+            } catch (e: Exception) {
+                Log.e(TAG, "clearAllData DB clear failed", e)
+            }
+            prefs.edit().clear().apply()
+            _isDarkTheme.value = true
+            _audioQuality.value = "auto"
+            _crossfadeEnabled.value = false
+            _crossfadeDuration.value = 3f
+            _downloadQuality.value = "auto"
+            _downloadWifiOnly.value = true
+            _lastBackupDate.value = 0L
+        }
     }
 }

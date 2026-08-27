@@ -42,7 +42,7 @@ object DirectApi {
                 }
             }
             val results = jobs.awaitAll().flatten()
-            val deduped = results.distinctBy { "${it.source}:${it.id}" }
+            val deduped = results.distinctBy { "${it.source}:${it.id.lowercase()}" }
             Log.d(TAG, "search() total=${deduped.size} results")
             deduped
         }
@@ -62,10 +62,18 @@ object DirectApi {
                 }
                 songId.startsWith("itunes_") -> {
                     val trackId = songId.removePrefix("itunes_")
-                    val results = ItunesSource.search(trackId, 1)
-                    results.firstOrNull()?.streamUrl ?: ""
+                    try {
+                        val results = ItunesSource.search(trackId, 1)
+                        results.firstOrNull { it.id == songId }?.streamUrl ?: results.firstOrNull()?.streamUrl ?: ""
+                    } catch (e: Exception) {
+                        Log.e(TAG, "itunes resolve failed", e)
+                        ""
+                    }
                 }
-                else -> ""
+                else -> {
+                    // Bare jiosaavn id fallback (backwards compat)
+                    try { JiosaavnSource.getStreamUrl(songId) } catch (_: Exception) { "" }
+                }
             }
         }
     }
@@ -86,9 +94,10 @@ object DirectApi {
 
                 val response = httpClient.newCall(request).execute()
                 val body = response.body?.string() ?: ""
+                val success = response.isSuccessful
                 response.close()
 
-                if (response.isSuccessful && body.isNotBlank()) {
+                if (success && body.isNotBlank()) {
                     val json = com.google.gson.JsonParser.parseString(body).asJsonObject
                     LyricsResponse(
                         title = json.get("trackName")?.asString ?: title,

@@ -23,30 +23,28 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
     val downloads: StateFlow<List<DownloadEntity>> = dao.getAllDownloads()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _totalSize = MutableStateFlow(0L)
-    val totalSize: StateFlow<Long> = _totalSize.asStateFlow()
+    val totalSize: StateFlow<Long> = downloads
+        .let { flow ->
+            kotlinx.coroutines.flow.map(flow) { list -> list.sumOf { it.fileSize } }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
     init {
         Log.d(TAG, "init")
-        loadTotalSize()
-    }
-
-    private fun loadTotalSize() {
-        Log.d(TAG, "loadTotalSize")
-        viewModelScope.launch {
-            _totalSize.value = dao.getTotalSize()
-        }
     }
 
     fun deleteDownload(download: DownloadEntity) {
         Log.d(TAG, "deleteDownload: ${download.songId}")
-        viewModelScope.launch {
-            val file = java.io.File(download.filePath)
-            if (file.exists()) {
-                file.delete()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val file = java.io.File(download.filePath)
+                if (file.exists() && !file.delete()) {
+                    Log.w(TAG, "Failed to delete file ${download.filePath}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "delete file error", e)
             }
-            dao.delete(download.songId)
-            _totalSize.value = dao.getTotalSize()
+            try { dao.delete(download.songId) } catch (e: Exception) { Log.e(TAG, "dao delete failed", e) }
         }
     }
 

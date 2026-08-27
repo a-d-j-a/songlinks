@@ -264,6 +264,7 @@ private fun PlaylistCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(120.dp)
                     .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
                     .background(CardBorder)
             ) {
@@ -362,10 +363,10 @@ private fun PlaylistDetailScreen(
             }
         } else {
             androidx.compose.foundation.lazy.LazyColumn(
-                contentPadding = PaddingValues(horizontal = 16.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(songs.size) { index ->
+                items(songs.size, key = { songs[it].id }) { index ->
                     val song = songs[index]
                     val dismissState = rememberSwipeToDismissBoxState(
                         confirmValueChange = { dismissValue ->

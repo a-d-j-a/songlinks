@@ -15,7 +15,7 @@ import androidx.room.PrimaryKey
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("playlistId")]
+    indices = [Index("playlistId"), Index(value = ["playlistId", "songId"], unique = true)]
 )
 data class PlaylistSongEntity(
     @PrimaryKey(autoGenerate = true)

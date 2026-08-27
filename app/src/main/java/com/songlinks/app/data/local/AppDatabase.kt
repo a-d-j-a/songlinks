@@ -12,7 +12,7 @@ import androidx.room.RoomDatabase
         PlaylistEntity::class,
         PlaylistSongEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -27,13 +27,15 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "songlinks_database"
-                ).fallbackToDestructiveMigration().build()
-                INSTANCE = instance
-                instance
+                INSTANCE ?: run {
+                    val instance = Room.databaseBuilder(
+                        context.applicationContext,
+                        AppDatabase::class.java,
+                        "songlinks_database"
+                    ).fallbackToDestructiveMigration().build()
+                    INSTANCE = instance
+                    instance
+                }
             }
         }
     }

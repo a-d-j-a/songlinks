@@ -13,7 +13,6 @@ import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
 import java.net.URLEncoder
-import java.util.Base64
 import java.util.concurrent.TimeUnit
 import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
@@ -36,7 +35,11 @@ object JiosaavnSource {
             val secretKey = SecretKeySpec(keyBytes, "DES")
             val cipher = Cipher.getInstance("DES/ECB/PKCS5Padding")
             cipher.init(Cipher.DECRYPT_MODE, secretKey)
-            val encryptedBytes = Base64.getDecoder().decode(encryptedBase64)
+            val encryptedBytes = try {
+                android.util.Base64.decode(encryptedBase64, android.util.Base64.DEFAULT)
+            } catch (_: Exception) {
+                java.util.Base64.getDecoder().decode(encryptedBase64)
+            }
             String(cipher.doFinal(encryptedBytes), Charsets.UTF_8)
         } catch (e: Exception) {
             Log.e(TAG, "DES decrypt failed", e)
@@ -69,13 +72,14 @@ object JiosaavnSource {
 
                 override fun onResponse(call: Call, response: Response) {
                     try {
+                        val body = response.body?.string() ?: ""
+                        val code = response.code
+                        response.close()
                         if (!response.isSuccessful) {
-                            Log.e(TAG, "search() HTTP ${response.code}")
+                            Log.e(TAG, "search() HTTP $code")
                             if (continuation.isActive) continuation.resume(emptyList())
                             return
                         }
-
-                        val body = response.body?.string() ?: ""
                         val json = JsonParser.parseString(body).asJsonObject
 
                         val songsData = json.getAsJsonObject("songs")?.getAsJsonArray("data")
@@ -121,7 +125,7 @@ object JiosaavnSource {
                                 songs.add(
                                     SongResult(
                                         source = "jiosaavn",
-                                        id = songId,
+                                        id = "jiosaavn_$songId",
                                         title = title,
                                         artist = artist,
                                         album = album,
@@ -140,6 +144,7 @@ object JiosaavnSource {
                         if (continuation.isActive) continuation.resume(songs)
                     } catch (e: Exception) {
                         Log.e(TAG, "search() parse error", e)
+                        try { response.close() } catch (_: Exception) {}
                         if (continuation.isActive) continuation.resume(emptyList())
                     }
                 }
@@ -168,8 +173,18 @@ object JiosaavnSource {
                 return@withContext ""
             }
 
-            val json = JsonParser.parseString(body).asJsonObject
-            val encryptedUrl = json.get("encrypted_media_url")?.asString ?: ""
+            val json = try { JsonParser.parseString(body).asJsonObject } catch (_: Exception) { null }
+            var encryptedUrl = json?.get("encrypted_media_url")?.asString ?: ""
+            if (encryptedUrl.isBlank() && json != null) {
+                // Try nested: songId -> object, or inside "songs" array
+                encryptedUrl = json.getAsJsonObject(songId)?.get("encrypted_media_url")?.asString ?: ""
+                if (encryptedUrl.isBlank()) {
+                    json.getAsJsonArray("songs")?.forEach { el ->
+                        val u = el.asJsonObject.get("encrypted_media_url")?.asString
+                        if (!u.isNullOrBlank()) encryptedUrl = u
+                    }
+                }
+            }
 
             if (encryptedUrl.isNotBlank()) {
                 val decrypted = decryptDesEcb(encryptedUrl)

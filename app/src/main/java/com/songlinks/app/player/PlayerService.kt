@@ -27,10 +27,12 @@ import androidx.annotation.OptIn
 import com.songlinks.app.MainActivity
 import com.songlinks.app.api.SongResult
 import com.songlinks.app.data.local.PlayerState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
@@ -68,10 +70,13 @@ class PlayerService : LifecycleService() {
         getSystemService(AUDIO_SERVICE) as AudioManager
     }
 
+    private var wasPlayingBeforeTransientLoss = false
+
     private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         when (focusChange) {
             AudioManager.AUDIOFOCUS_LOSS,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                wasPlayingBeforeTransientLoss = PlayerState.isPlaying.value
                 pause()
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
@@ -79,7 +84,10 @@ class PlayerService : LifecycleService() {
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
                 exoPlayer?.volume = 1.0f
-                resume()
+                if (wasPlayingBeforeTransientLoss) {
+                    resume()
+                    wasPlayingBeforeTransientLoss = false
+                }
             }
         }
     }
@@ -113,7 +121,8 @@ class PlayerService : LifecycleService() {
 
         override fun onPlayerError(error: PlaybackException) {
             Log.e(TAG, "onPlayerError: ${error.message}", error)
-            PlayerState.togglePlay()
+            PlayerState.setPlaying(false)
+            stopPositionPolling()
         }
     }
 
@@ -151,9 +160,9 @@ class PlayerService : LifecycleService() {
                 .setUsage(androidx.media3.common.C.USAGE_MEDIA)
                 .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MUSIC)
                 .build()
-            setAudioAttributes(audioAttributes, true)
+            setAudioAttributes(audioAttributes, false)
         }
-        mediaSession = Builder(this, exoPlayer!!).build()
+        exoPlayer?.let { mediaSession = Builder(this, it).build() }
     }
 
     private fun createNotificationChannel() {
@@ -169,38 +178,49 @@ class PlayerService : LifecycleService() {
         notificationManager.createNotificationChannel(channel)
     }
 
+    private fun resolveStreamUrl(song: SongResult): String {
+        return song.streams.firstOrNull()?.url?.takeIf { it.isNotBlank() }
+            ?: song.streamUrl.takeIf { it.isNotBlank() } ?: ""
+    }
+
     @OptIn(UnstableApi::class)
     fun play(url: String, title: String, artist: String) {
-        Log.d(TAG, "play() url=$url, title=$title, artist=$artist")
-        requestAudioFocus()
+        if (url.isBlank()) {
+            Log.e(TAG, "play() blank url, aborting")
+            return
+        }
+        Log.d(TAG, "play() url=${url.take(80)}, title=$title, artist=$artist")
         val player = exoPlayer ?: return
-        val mediaItem = MediaItem.fromUri(url)
-        player.setMediaItem(mediaItem)
-        player.prepare()
-        player.play()
-        Log.d(TAG, "play() starting foreground notification")
-        startForeground(NOTIFICATION_ID, buildNotification(title, artist))
+        requestAudioFocus()
+        try {
+            val mediaItem = MediaItem.fromUri(url)
+            player.setMediaItem(mediaItem)
+            player.prepare()
+            player.play()
+            Log.d(TAG, "play() starting foreground notification")
+            startForeground(NOTIFICATION_ID, buildNotification(title, artist))
+        } catch (e: Exception) {
+            Log.e(TAG, "play() failed", e)
+            PlayerState.setPlaying(false)
+        }
     }
 
     fun playSong(song: SongResult) {
-        val streamUrl = song.streams.firstOrNull()?.url
-        if (streamUrl.isNullOrBlank()) {
+        val streamUrl = resolveStreamUrl(song)
+        if (streamUrl.isBlank()) {
             Log.w(TAG, "playSong() no stream URL for: ${song.title} - ${song.artist}")
             return
         }
-        Log.d(TAG, "playSong() ${song.title} - ${song.artist}, streamUrl=$streamUrl")
-        val durationMs = (song.duration ?: 0).toLong() * 1000L
+        Log.d(TAG, "playSong() ${song.title} - ${song.artist}, streamUrl=${streamUrl.take(80)}")
         PlayerState.playSong(song)
-        PlayerState.updateDuration(durationMs)
+        PlayerState.updateDuration((song.duration ?: 0).toLong())
         play(streamUrl, song.title, song.artist)
     }
 
     fun pause() {
         Log.d(TAG, "pause()")
         exoPlayer?.pause()
-        if (PlayerState.isPlaying.value) {
-            PlayerState.togglePlay()
-        }
+        PlayerState.setPlaying(false)
         abandonAudioFocus()
     }
 
@@ -208,9 +228,7 @@ class PlayerService : LifecycleService() {
         Log.d(TAG, "resume()")
         requestAudioFocus()
         exoPlayer?.play()
-        if (!PlayerState.isPlaying.value) {
-            PlayerState.togglePlay()
-        }
+        PlayerState.setPlaying(true)
     }
 
     fun seekTo(positionMs: Long) {
@@ -244,8 +262,8 @@ class PlayerService : LifecycleService() {
         PlayerState.next()
         val newSong = PlayerState.currentSong.value
         if (newSong != null) {
-            val streamUrl = newSong.streams.firstOrNull()?.url
-            if (!streamUrl.isNullOrBlank()) {
+            val streamUrl = resolveStreamUrl(newSong)
+            if (streamUrl.isNotBlank()) {
                 Log.d(TAG, "skipToNext() playing: ${newSong.title} - ${newSong.artist}")
                 play(streamUrl, newSong.title, newSong.artist)
             } else {
@@ -262,11 +280,17 @@ class PlayerService : LifecycleService() {
         Log.d(TAG, "skipToPrevious()")
         val currentQueue = PlayerState.queue.value
         if (currentQueue.isEmpty()) return
+        // If position >3s, just seek to start instead of changing track
+        if (PlayerState.position.value > 3000L) {
+            seekTo(0L)
+            exoPlayer?.seekTo(0L)
+            return
+        }
         PlayerState.previous()
         val newSong = PlayerState.currentSong.value
         if (newSong != null) {
-            val streamUrl = newSong.streams.firstOrNull()?.url
-            if (!streamUrl.isNullOrBlank()) {
+            val streamUrl = resolveStreamUrl(newSong)
+            if (streamUrl.isNotBlank()) {
                 Log.d(TAG, "skipToPrevious() playing: ${newSong.title} - ${newSong.artist}")
                 play(streamUrl, newSong.title, newSong.artist)
             } else {
@@ -277,21 +301,31 @@ class PlayerService : LifecycleService() {
 
     fun setQueueAndPlay(songs: List<SongResult>, startIndex: Int = 0) {
         Log.d(TAG, "setQueueAndPlay() songs=${songs.size}, startIndex=$startIndex")
-        PlayerState.playQueue(songs, startIndex)
-        val song = songs.getOrNull(startIndex) ?: return
-        playSong(song)
+        if (songs.isEmpty()) return
+        val safeIndex = startIndex.coerceIn(songs.indices)
+        PlayerState.playQueue(songs, safeIndex)
+        val song = songs[safeIndex]
+        val streamUrl = resolveStreamUrl(song)
+        if (streamUrl.isNotBlank()) {
+            PlayerState.updateDuration((song.duration ?: 0).toLong())
+            play(streamUrl, song.title, song.artist)
+        } else {
+            Log.w(TAG, "setQueueAndPlay() no stream URL for ${song.title}")
+        }
     }
 
     private fun onTrackComplete() {
         Log.d(TAG, "onTrackComplete()")
-        val currentQueue = PlayerState.queue.value
+        val currentQueue = PlayerState.queue.value.toList()
         val index = PlayerState.currentIndex.value
         val repeat = PlayerState.repeatMode.value
 
         if (repeat == 2) {
-            Log.d(TAG, "onTrackComplete() repeat all, seeking to start")
+            Log.d(TAG, "onTrackComplete() repeat one, seeking to start")
             exoPlayer?.seekTo(0)
             exoPlayer?.play()
+            PlayerState.updatePosition(0L)
+            PlayerState.setPlaying(true)
             return
         }
 
@@ -305,8 +339,8 @@ class PlayerService : LifecycleService() {
             PlayerState.next()
             val newSong = PlayerState.currentSong.value
             if (newSong != null) {
-                val streamUrl = newSong.streams.firstOrNull()?.url
-                if (!streamUrl.isNullOrBlank()) {
+                val streamUrl = resolveStreamUrl(newSong)
+                if (streamUrl.isNotBlank()) {
                     Log.d(TAG, "onTrackComplete() playing next: ${newSong.title} - ${newSong.artist}")
                     play(streamUrl, newSong.title, newSong.artist)
                     return
@@ -315,18 +349,18 @@ class PlayerService : LifecycleService() {
         }
 
         if (repeat == 1 && currentQueue.isNotEmpty()) {
-            Log.d(TAG, "onTrackComplete() repeat one, replaying first song")
+            Log.d(TAG, "onTrackComplete() repeat all, replaying first song")
             val firstSong = currentQueue[0]
             PlayerState.playQueue(currentQueue, 0)
-            val streamUrl = firstSong.streams.firstOrNull()?.url
-            if (!streamUrl.isNullOrBlank()) {
+            val streamUrl = resolveStreamUrl(firstSong)
+            if (streamUrl.isNotBlank()) {
                 play(streamUrl, firstSong.title, firstSong.artist)
                 return
             }
         }
 
         Log.d(TAG, "onTrackComplete() no more tracks, stopping")
-        PlayerState.togglePlay()
+        PlayerState.setPlaying(false)
         stopPositionPolling()
         stopForeground(STOP_FOREGROUND_DETACH)
         stopSelf()
@@ -432,6 +466,10 @@ class PlayerService : LifecycleService() {
     }
 
     fun startSleepTimer(minutes: Int) {
+        if (minutes <= 0) {
+            Log.w(TAG, "startSleepTimer() invalid minutes=$minutes")
+            return
+        }
         Log.d(TAG, "startSleepTimer() minutes=$minutes")
         cancelSleepTimer()
         val durationMs = minutes.toLong() * 60_000L
@@ -466,27 +504,37 @@ class PlayerService : LifecycleService() {
         disableEqualizer()
         val player = exoPlayer ?: return
         val audioSessionId = player.audioSessionId
-        equalizer = Equalizer(0, audioSessionId).apply {
-            enabled = true
-            val numBands = numberOfBands.toInt()
-            val minLevel = bandLevelRange[0]
-            val maxLevel = bandLevelRange[1]
-            for (i in 0 until numBands) {
-                val level = if (i < bandLevels.size) {
-                    bandLevels[i].coerceIn(minLevel, maxLevel)
-                } else {
-                    0
-                }
-                setBandLevel(i.toShort(), level)
-            }
+        if (audioSessionId == 0 || audioSessionId == android.media.audiofx.AudioEffect.ERROR_BAD_VALUE) {
+            Log.w(TAG, "enableEqualizer() invalid audioSessionId=$audioSessionId")
+            return
         }
-        PlayerState.setEqualizerEnabled(true)
-        updateEqualizerBandsState()
+        try {
+            equalizer = Equalizer(0, audioSessionId).apply {
+                enabled = true
+                val numBands = numberOfBands.toInt()
+                val minLevel = bandLevelRange[0]
+                val maxLevel = bandLevelRange[1]
+                for (i in 0 until numBands) {
+                    val level = if (i < bandLevels.size) {
+                        bandLevels[i].coerceIn(minLevel, maxLevel)
+                    } else {
+                        0
+                    }
+                    setBandLevel(i.toShort(), level)
+                }
+            }
+            PlayerState.setEqualizerEnabled(true)
+            updateEqualizerBandsState()
+        } catch (e: Exception) {
+            Log.e(TAG, "enableEqualizer() failed", e)
+            equalizer = null
+            PlayerState.setEqualizerEnabled(false)
+        }
     }
 
     fun disableEqualizer() {
         Log.d(TAG, "disableEqualizer()")
-        equalizer?.release()
+        try { equalizer?.release() } catch (_: Exception) {}
         equalizer = null
         PlayerState.setEqualizerEnabled(false)
         PlayerState.updateEqualizerBands(emptyList())
@@ -532,8 +580,9 @@ class PlayerService : LifecycleService() {
         val encodedTitle = URLEncoder.encode(title, "UTF-8")
         val encodedArtist = URLEncoder.encode(artist, "UTF-8")
         val urlStr = "$baseUrl/lyrics?title=$encodedTitle&artist=$encodedArtist"
-        val connection = URL(urlStr).openConnection() as HttpURLConnection
+        var connection: HttpURLConnection? = null
         try {
+            connection = URL(urlStr).openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
             connection.connectTimeout = 10000
             connection.readTimeout = 10000
@@ -545,9 +594,10 @@ class PlayerService : LifecycleService() {
                 emit("")
             }
         } catch (e: Exception) {
+            Log.e(TAG, "fetchLyrics error", e)
             emit("")
         } finally {
-            connection.disconnect()
+            connection?.disconnect()
         }
-    }
+    }.flowOn(Dispatchers.IO)
 }

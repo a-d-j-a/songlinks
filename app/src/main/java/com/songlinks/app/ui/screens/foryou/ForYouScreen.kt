@@ -149,7 +149,7 @@ fun ForYouScreen(
                         contentPadding = PaddingValues(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(recentlyPlayed) { song ->
+                        items(recentlyPlayed, key = { it.id }) { song ->
                             RecentSongCard(
                                 song = song,
                                 onClick = { onSongTap(song) }
@@ -171,7 +171,7 @@ fun ForYouScreen(
                         contentPadding = PaddingValues(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(topArtists) { (artist, count) ->
+                        items(topArtists, key = { it.first }) { (artist, count) ->
                             ArtistCard(
                                 artist = artist,
                                 songCount = count
@@ -232,7 +232,7 @@ fun ForYouScreen(
                         title = "Discover Something New"
                     )
                 }
-                items(recommendations) { song ->
+                items(recommendations, key = { it.id }) { song ->
                     RecommendationSongCard(
                         song = song,
                         onClick = { onSongTap(song) },

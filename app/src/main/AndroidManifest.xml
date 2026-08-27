@@ -31,5 +31,16 @@
             android:name=".player.PlayerService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="false" />
+
+        <receiver
+            android:name=".player.PlayerReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.songlinks.app.action.PLAY" />
+                <action android:name="com.songlinks.app.action.PAUSE" />
+                <action android:name="com.songlinks.app.action.NEXT" />
+                <action android:name="com.songlinks.app.action.PREVIOUS" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

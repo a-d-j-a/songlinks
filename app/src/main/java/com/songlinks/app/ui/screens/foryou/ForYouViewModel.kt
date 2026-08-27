@@ -8,6 +8,8 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.songlinks.app.api.SongApi
 import com.songlinks.app.api.SongResult
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -85,19 +87,21 @@ class ForYouViewModel(application: Application) : AndroidViewModel(application) 
                     return@launch
                 }
 
-                val allResults = mutableListOf<SongResult>()
                 val queries = topArtistsList.take(3).map { it.first }
-
-                for (query in queries) {
-                    try {
-                        val results = api.search(query, setOf("itunes", "jiosaavn"))
-                        allResults.addAll(results.filter { song ->
-                            _recentlyPlayed.value.none { it.id == song.id }
-                        })
-                    } catch (_: Exception) {
+                val deferred = queries.map { query ->
+                    kotlinx.coroutines.async(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            api.search(query, setOf("itunes", "jiosaavn"))
+                        } catch (e: Exception) {
+                            Log.e(TAG, "recommendation query failed: $query", e)
+                            emptyList()
+                        }
                     }
                 }
-
+                val resultsList = deferred.awaitAll()
+                val allResults = resultsList.flatten().filter { song ->
+                    _recentlyPlayed.value.none { it.id == song.id }
+                }
                 _recommendations.value = allResults.distinctBy { it.id }.take(20)
                 Log.d(TAG, "loadRecommendations: topArtists=${queries.size}, recommendationsCount=${_recommendations.value.size}")
             } catch (e: Exception) {
@@ -114,8 +118,29 @@ class ForYouViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             _isRefreshing.value = true
             loadHistory()
-            loadRecommendations()
-            _isRefreshing.value = false
+            // Await recommendation load directly without launching child
+            _isLoading.value = true
+            _error.value = null
+            try {
+                val topArtistsList = _topArtists.value
+                if (topArtistsList.isEmpty()) {
+                    _recommendations.value = emptyList()
+                } else {
+                    val queries = topArtistsList.take(3).map { it.first }
+                    val deferred = queries.map { query ->
+                        kotlinx.coroutines.async(kotlinx.coroutines.Dispatchers.IO) {
+                            try { api.search(query, setOf("itunes", "jiosaavn")) } catch (_: Exception) { emptyList() }
+                        }
+                    }
+                    val allResults = deferred.awaitAll().flatten().filter { song -> _recentlyPlayed.value.none { it.id == song.id } }
+                    _recommendations.value = allResults.distinctBy { it.id }.take(20)
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Failed to load recommendations"
+            } finally {
+                _isLoading.value = false
+                _isRefreshing.value = false
+            }
         }
     }
 }

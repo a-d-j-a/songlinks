@@ -1,9 +1,10 @@
 package com.songlinks.app.data.local
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "saved_songs")
+@Entity(tableName = "saved_songs", indices = [Index(value = ["songId"], unique = true)])
 data class SongEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,

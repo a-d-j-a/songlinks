@@ -143,7 +143,7 @@ fun HomeScreen(
                         contentPadding = PaddingValues(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(recentSearches) { query ->
+                        items(recentSearches, key = { it }) { query ->
                             SuggestionChip(
                                 onClick = { onSearch(query) },
                                 label = { Text(query) },

@@ -51,6 +51,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,8 +89,8 @@ fun LibraryScreen(
 ) {
     LaunchedEffect(Unit) { Log.d("LibraryScreen", "Composing") }
 
-    var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Saved", "History", "Playlists", "Stats")
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val tabs = remember { listOf("Saved", "History", "Playlists", "Stats") }
 
     val savedSongs by viewModel.savedSongs.collectAsState()
     val history by viewModel.history.collectAsState()
@@ -231,6 +232,7 @@ private fun SavedSongCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(140.dp)
                     .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
                     .background(CardBorder)
             ) {
@@ -306,7 +308,7 @@ private fun HistoryTab(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(history) { song ->
+                items(history, key = { it.id }) { song ->
                     HistorySongCard(
                         song = song,
                         onClick = { onPlaySong(song) }
@@ -437,7 +439,7 @@ private fun StatsTab(stats: LibraryStats) {
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
-            items(stats.topArtists.size) { index ->
+            items(stats.topArtists.size, key = { stats.topArtists[it].first }) { index ->
                 val (artist, count) = stats.topArtists[index]
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -486,7 +488,7 @@ private fun StatsTab(stats: LibraryStats) {
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
-            items(stats.sourceBreakdown.size) { index ->
+            items(stats.sourceBreakdown.size, key = { stats.sourceBreakdown[it].first }) { index ->
                 val (source, count) = stats.sourceBreakdown[index]
                 val color = when (source.lowercase()) {
                     "itunes" -> SourceiTunes

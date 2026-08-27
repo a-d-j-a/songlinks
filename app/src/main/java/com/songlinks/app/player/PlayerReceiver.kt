@@ -6,9 +6,19 @@ import android.content.Intent
 
 class PlayerReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        val action = intent.action ?: return
         val serviceIntent = Intent(context, PlayerService::class.java).apply {
-            action = intent.action
+            this.action = action
+            putExtras(intent)
         }
-        context.startService(serviceIntent)
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                context.startForegroundService(serviceIntent)
+            } else {
+                context.startService(serviceIntent)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("PlayerReceiver", "start service failed", e)
+        }
     }
 }

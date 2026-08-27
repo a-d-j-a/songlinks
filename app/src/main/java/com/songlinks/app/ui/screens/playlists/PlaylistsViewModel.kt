@@ -33,19 +33,18 @@ class PlaylistsViewModel(application: Application) : AndroidViewModel(applicatio
     private val _playlistCounts = MutableStateFlow<Map<Long, Int>>(emptyMap())
     val playlistCounts: StateFlow<Map<Long, Int>> = _playlistCounts.asStateFlow()
 
+    private var songsCollectJob: kotlinx.coroutines.Job? = null
+
     init {
         Log.d(TAG, "init")
-        loadPlaylistCounts()
-    }
-
-    private fun loadPlaylistCounts() {
-        Log.d(TAG, "loadPlaylistCounts")
         viewModelScope.launch {
-            val counts = mutableMapOf<Long, Int>()
-            playlists.value.forEach { playlist ->
-                counts[playlist.id] = dao.getPlaylistCount(playlist.id)
+            playlists.collect { list ->
+                val counts = mutableMapOf<Long, Int>()
+                for (pl in list) {
+                    try { counts[pl.id] = dao.getPlaylistCount(pl.id) } catch (_: Exception) {}
+                }
+                _playlistCounts.value = counts
             }
-            _playlistCounts.value = counts
         }
     }
 
@@ -72,14 +71,19 @@ class PlaylistsViewModel(application: Application) : AndroidViewModel(applicatio
     fun renamePlaylist(playlist: PlaylistEntity, newName: String) {
         Log.d(TAG, "renamePlaylist: ${playlist.id} -> $newName")
         viewModelScope.launch {
-            dao.updatePlaylist(playlist.copy(name = newName, updatedAt = System.currentTimeMillis()))
+            val updated = playlist.copy(name = newName, updatedAt = System.currentTimeMillis())
+            dao.updatePlaylist(updated)
+            if (_selectedPlaylist.value?.id == playlist.id) {
+                _selectedPlaylist.value = updated
+            }
         }
     }
 
     fun selectPlaylist(playlist: PlaylistEntity) {
         Log.d(TAG, "selectPlaylist: ${playlist.id}")
+        songsCollectJob?.cancel()
         _selectedPlaylist.value = playlist
-        viewModelScope.launch {
+        songsCollectJob = viewModelScope.launch {
             dao.getSongsInPlaylist(playlist.id).collect { songs ->
                 _playlistSongs.value = songs
                 _playlistCounts.value = _playlistCounts.value + (playlist.id to songs.size)
@@ -89,6 +93,8 @@ class PlaylistsViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun deselectPlaylist() {
         Log.d(TAG, "deselectPlaylist")
+        songsCollectJob?.cancel()
+        songsCollectJob = null
         _selectedPlaylist.value = null
         _playlistSongs.value = emptyList()
     }
@@ -96,22 +102,32 @@ class PlaylistsViewModel(application: Application) : AndroidViewModel(applicatio
     fun addToPlaylist(playlistId: Long, song: SongResult) {
         Log.d(TAG, "addToPlaylist: playlistId=$playlistId, songId=${song.id}")
         viewModelScope.launch {
-            val maxPos = _playlistSongs.value.maxOfOrNull { it.position } ?: 0
-            dao.insertSongToPlaylist(
-                PlaylistSongEntity(
-                    playlistId = playlistId,
-                    source = song.source,
-                    songId = song.id,
-                    title = song.title,
-                    artist = song.artist,
-                    album = song.album,
-                    cover = song.cover,
-                    page = song.page,
-                    duration = song.duration,
-                    position = maxPos + 1
+            try {
+                // Get max position for target playlist, not selected one
+                val currentSongs = if (_selectedPlaylist.value?.id == playlistId) _playlistSongs.value else emptyList()
+                val maxPos = if (currentSongs.isNotEmpty()) currentSongs.maxOf { it.position } else {
+                    // Fallback query if not selected
+                    try { dao.getPlaylistCount(playlistId) } catch (_: Exception) { 0 }
+                }
+                dao.insertSongToPlaylist(
+                    PlaylistSongEntity(
+                        playlistId = playlistId,
+                        source = song.source,
+                        songId = song.id,
+                        title = song.title,
+                        artist = song.artist,
+                        album = song.album,
+                        cover = song.cover,
+                        page = song.page,
+                        duration = song.duration,
+                        position = maxPos + 1
+                    )
                 )
-            )
-            _playlistCounts.value = _playlistCounts.value + (playlistId to (dao.getPlaylistCount(playlistId)))
+                _playlistCounts.value = _playlistCounts.value + (playlistId to (dao.getPlaylistCount(playlistId)))
+            } catch (e: Exception) {
+                // Unique constraint -> already in playlist
+                Log.w(TAG, "addToPlaylist failed (duplicate?)", e)
+            }
         }
     }
 

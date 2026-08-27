@@ -7,13 +7,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.songlinks.app.api.SongApi
 import com.songlinks.app.api.SongResult
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 
 private const val TAG = "SearchViewModel"
@@ -39,20 +42,31 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private val _activeSources = MutableStateFlow(setOf("itunes", "jiosaavn", "ytmusic"))
     val activeSources: StateFlow<Set<String>> = _activeSources.asStateFlow()
 
+    private var searchJob: Job? = null
+
     init {
         viewModelScope.launch {
             _query
                 .debounce(300L)
                 .distinctUntilChanged()
-                .filter { it.isNotBlank() }
-                .collect { searchQuery ->
-                    performSearch(searchQuery)
+                .collectLatest { searchQuery ->
+                    if (searchQuery.isBlank()) {
+                        _results.value = emptyList()
+                        _error.value = null
+                        _isLoading.value = false
+                    } else {
+                        performSearch(searchQuery)
+                    }
                 }
         }
     }
 
     fun updateQuery(newQuery: String) {
         _query.value = newQuery
+        if (newQuery.isBlank()) {
+            _results.value = emptyList()
+            _error.value = null
+        }
     }
 
     fun toggleSource(source: String) {
@@ -65,7 +79,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         _activeSources.value = current
 
         if (_query.value.isNotBlank()) {
-            viewModelScope.launch {
+            searchJob?.cancel()
+            searchJob = viewModelScope.launch {
                 performSearch(_query.value)
             }
         }
@@ -74,16 +89,22 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private suspend fun performSearch(searchQuery: String) {
         _isLoading.value = true
         _error.value = null
+        _results.value = emptyList()
         try {
             val searchResults = api.search(searchQuery, _activeSources.value)
             _results.value = searchResults
-            saveToRecent(searchQuery)
+            if (searchResults.isNotEmpty()) saveToRecent(searchQuery)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Search failed", e)
+            val msg = e.message ?: ""
             _error.value = when {
-                e.message?.contains("connect", true) == true || e.message?.contains("timeout", true) == true ->
+                msg.contains("Unable to resolve host", true) || msg.contains("UnknownHost", true) ->
+                    "No internet connection. Check your network."
+                msg.contains("connect", true) || msg.contains("timeout", true) || msg.contains("Socket", true) ->
                     "Cannot reach network. Please check your internet connection."
-                else -> e.message ?: "Search failed"
+                else -> msg.ifBlank { "Search failed" }
             }
         } finally {
             _isLoading.value = false
@@ -91,16 +112,28 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun saveToRecent(query: String) {
-        val recent = prefs.getStringSet("recent_searches", emptySet())?.toMutableSet()
-            ?: mutableSetOf()
-        recent.remove(query)
-        recent.add(query)
-        val limited = recent.toList().takeLast(5).toSet()
-        prefs.edit().putStringSet("recent_searches", limited).apply()
+        try {
+            val json = prefs.getString("recent_searches_json", null)
+            val type = object : TypeToken<MutableList<String>>() {}.type
+            val recent: MutableList<String> = if (json != null) Gson().fromJson(json, type) ?: mutableListOf() else mutableListOf()
+            // Migrate old set format if exists
+            if (recent.isEmpty()) {
+                prefs.getStringSet("recent_searches", null)?.let { set ->
+                    recent.addAll(set)
+                }
+            }
+            recent.remove(query)
+            recent.add(0, query)
+            val limited = recent.take(10)
+            prefs.edit().putString("recent_searches_json", Gson().toJson(limited)).apply()
+            prefs.edit().remove("recent_searches").apply()
+        } catch (e: Exception) {
+            Log.e(TAG, "saveToRecent failed", e)
+        }
     }
 
     fun setInitialQuery(initialQuery: String) {
-        if (initialQuery.isNotBlank() && _query.value.isEmpty()) {
+        if (initialQuery.isNotBlank()) {
             _query.value = initialQuery
         }
     }

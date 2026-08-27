@@ -82,7 +82,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         current.add(0, song)
         if (current.size > 100) current.removeLast()
         _history.value = current
-        saveHistory()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) { saveHistory() }
     }
 
     fun clearHistory() {
@@ -103,8 +103,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun saveHistory() {
-        val json = gson.toJson(_history.value)
-        prefs.edit().putString("play_history", json).apply()
+        try {
+            val json = gson.toJson(_history.value)
+            prefs.edit().putString("play_history", json).apply()
+        } catch (e: Exception) { android.util.Log.e("LibraryViewModel", "saveHistory failed", e) }
     }
 
     fun songEntityToResult(entity: SongEntity): SongResult {
