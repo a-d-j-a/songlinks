@@ -465,7 +465,7 @@ class PlayerService : LifecycleService() {
         val numBands = eq.numberOfBands.toInt()
         val bands = mutableListOf<Pair<Int, Short>>()
         for (i in 0 until numBands) {
-            val freq = eq.getBandFreq(i.toShort()).toInt()
+            val freq = eq.getCenterFreq(i.toShort())
             val level = eq.getBandLevel(i.toShort())
             bands.add(freq to level)
         }
