@@ -5,15 +5,13 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonParser
 import com.songlinks.app.api.SongResult
-import com.songlinks.app.util.NewPipeDownloader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.schabi.newpipe.extractor.NewPipe
-import org.schabi.newpipe.extractor.ServiceList
+import java.net.URLDecoder
 import java.util.concurrent.TimeUnit
 
 private const val TAG = "YtmusicSource"
@@ -292,41 +290,97 @@ object YtmusicSource {
                     Log.d(TAG, "getStreamUrl() success with $clientName for videoId=$videoId")
                     return@withContext url
                 }
+                // Try cipher decipher for this client before trying next client
+                val cipher = audioFormat?.get("signatureCipher")?.asString ?: audioFormat?.get("cipher")?.asString
+                if (!cipher.isNullOrBlank()) {
+                    try {
+                        val params = cipher.split("&").associate { param ->
+                            val kv = param.split("=", limit = 2)
+                            val k = kv[0]
+                            val v = if (kv.size > 1) URLDecoder.decode(kv[1], "UTF-8") else ""
+                            k to v
+                        }
+                        val cipheredUrl = params["url"] ?: ""
+                        val s = params["s"] ?: ""
+                        val sp = params["sp"] ?: "sig"
+                        if (cipheredUrl.isNotBlank() && s.isNotBlank()) {
+                            val deciphered = YoutubeCipher.decipherSignature(s, videoId)
+                            if (deciphered != null) {
+                                val separator = if (cipheredUrl.contains("?")) "&" else "?"
+                                val finalUrl = "$cipheredUrl$separator$sp=$deciphered"
+                                Log.d(TAG, "Decipher success with $clientName for $videoId")
+                                return@withContext finalUrl
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Decipher failed for $clientName", e)
+                    }
+                }
                 Log.d(TAG, "getStreamUrl() $clientName: no direct URL (cipher required)")
             } catch (e: Exception) {
                 Log.e(TAG, "getStreamUrl() $clientName failed", e)
             }
         }
 
-        Log.w(TAG, "getStreamUrl() all clients failed for videoId=$videoId, trying NewPipe")
-        // Fallback to NewPipeExtractor which handles signature decipher and throttling bypass
-        return@withContext try {
-            try { NewPipe.init(NewPipeDownloader.getInstance()) } catch (_: Exception) {}
-            val service = ServiceList.YouTube
-            val url = "https://www.youtube.com/watch?v=$videoId"
-            val extractor = service.getStreamExtractor(url)
-            extractor.fetchPage()
-            val audioStreams = extractor.audioStreams
-            Log.d(TAG, "NewPipe found ${audioStreams.size} audio streams for $videoId")
-            val best = audioStreams.maxByOrNull { it.averageBitrate }
-            if (best != null && best.url.isNotBlank()) {
-                Log.d(TAG, "NewPipe success: bitrate=${best.averageBitrate}, url=${best.url.take(60)}")
-                best.url
-            } else {
-                val videoStreams = extractor.videoStreams
-                val vBest = videoStreams.maxByOrNull { it.height }
-                if (vBest != null && vBest.url.isNotBlank()) {
-                    Log.d(TAG, "NewPipe fallback video stream url")
-                    vBest.url
-                } else {
-                    Log.w(TAG, "NewPipe no streams for $videoId")
-                    ""
+        // Final fallback: re-try cipher across all clients (in case first pass missed format)
+        Log.w(TAG, "getStreamUrl() all clients failed for videoId=$videoId, checking signatureCipher")
+        // Re-try with cipher decipher if available (use last response's cipher)
+        // We need to re-fetch with cipher handling: loop again but now decipher
+        for ((clientName, clientVersion, userAgent) in clients) {
+            try {
+                val sdk = if (clientName.startsWith("ANDROID")) 30 else 0
+                val payload = buildString {
+                    append("""{"context":{"client":{"clientName":"$clientName","clientVersion":"$clientVersion","hl":"en","gl":"US"""")
+                    if (sdk > 0) append(""","androidSdkVersion":$sdk""")
+                    append("""}},"videoId":"$safeVideoId","contentCheckOk":true,"racyCheckOk":true}""")
                 }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "NewPipe extractor failed for $videoId", e)
-            ""
+                val request = Request.Builder()
+                    .url("$YT_INNERTUBE_BASE/player?key=$YT_INNERTUBE_KEY")
+                    .header("User-Agent", userAgent)
+                    .header("Content-Type", "application/json")
+                    .header("Origin", YT_BASE)
+                    .post(payload.toRequestBody("application/json".toMediaType()))
+                    .build()
+                val response = client.newCall(request).execute()
+                val body = response.body?.string() ?: ""
+                response.close()
+                if (!response.isSuccessful) continue
+                val json = JsonParser.parseString(body).asJsonObject
+                val streamingData = json.getAsJsonObject("streamingData") ?: continue
+                val formats = mutableListOf<com.google.gson.JsonObject>()
+                streamingData.getAsJsonArray("adaptiveFormats")?.let { formats.addAll(it.map { it.asJsonObject }) }
+                streamingData.getAsJsonArray("formats")?.let { formats.addAll(it.map { it.asJsonObject }) }
+                for (fmt in formats.filter { it.get("mimeType")?.asString?.startsWith("audio/") == true }.sortedByDescending { it.get("bitrate")?.asInt ?: 0 }) {
+                    val cipher = fmt.get("signatureCipher")?.asString ?: fmt.get("cipher")?.asString
+                    if (!cipher.isNullOrBlank()) {
+                        try {
+                            val params = cipher.split("&").associate { param ->
+                                val kv = param.split("=", limit = 2)
+                                val k = kv[0]
+                                val v = if (kv.size > 1) URLDecoder.decode(kv[1], "UTF-8") else ""
+                                k to v
+                            }
+                            val cipheredUrl = params["url"] ?: ""
+                            val s = params["s"] ?: ""
+                            val sp = params["sp"] ?: "sig"
+                            if (cipheredUrl.isNotBlank() && s.isNotBlank()) {
+                                val deciphered = YoutubeCipher.decipherSignature(s, videoId)
+                                if (deciphered != null) {
+                                    val separator = if (cipheredUrl.contains("?")) "&" else "?"
+                                    val finalUrl = "$cipheredUrl$separator$sp=$deciphered"
+                                    Log.d(TAG, "Decipher success with $clientName for $videoId")
+                                    return@withContext finalUrl
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Decipher failed", e)
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
         }
+        Log.w(TAG, "getStreamUrl() cipher decipher also failed for $videoId")
+        ""
     }
 
     private fun collectMusicItems(obj: com.google.gson.JsonObject): List<com.google.gson.JsonObject> {
