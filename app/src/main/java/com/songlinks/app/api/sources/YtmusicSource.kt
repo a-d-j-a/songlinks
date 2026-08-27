@@ -98,25 +98,32 @@ object YtmusicSource {
                         if (videoId.isBlank()) continue
 
                         // Title from first column
-                        val title = columns[0].asJsonObject
+                        val titleRuns = columns[0].asJsonObject
                             ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
                             ?.getAsJsonArray("runs")
-                            ?.joinToString("") { it.asJsonObject.get("text")?.asString ?: "" } ?: ""
+                        val title = titleRuns
+                            ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
 
                         if (title.isBlank()) continue
 
                         // Artist from second column
-                        val artist = columns.getOrNull(1)?.asJsonObject
-                            ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                            ?.getAsJsonArray("runs")
-                            ?.filter { it.asJsonObject.has("navigationEndpoint") }
-                            ?.joinToString("") { it.asJsonObject.get("text")?.asString ?: "" } ?: ""
+                        val artistRuns = if (columns.size() > 1)
+                            columns[1].asJsonObject
+                                ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
+                                ?.getAsJsonArray("runs")
+                        else null
+                        val artist = artistRuns
+                            ?.filter { elem -> elem.asJsonObject.has("navigationEndpoint") }
+                            ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
 
                         // Album from third column (if exists)
-                        val album = columns.getOrNull(2)?.asJsonObject
-                            ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                            ?.getAsJsonArray("runs")
-                            ?.joinToString("") { it.asJsonObject.get("text")?.asString ?: "" } ?: ""
+                        val albumRuns = if (columns.size() > 2)
+                            columns[2].asJsonObject
+                                ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
+                                ?.getAsJsonArray("runs")
+                        else null
+                        val album = albumRuns
+                            ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
 
                         // Duration from last column
                         val durationText = columns.lastOrNull()?.asJsonObject

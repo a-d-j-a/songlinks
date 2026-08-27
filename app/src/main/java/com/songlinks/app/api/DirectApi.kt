@@ -89,7 +89,7 @@ object DirectApi {
                     LyricsResponse(
                         title = json.get("trackName")?.asString ?: title,
                         artist = json.get("artistName")?.asString ?: artist,
-                        lyrics = json.get("plainLyrics")?.asString,
+                        lyrics = json.get("plainLyrics")?.asString ?: "",
                         syncedLyrics = json.get("syncedLyrics")?.asString
                     )
                 } else {
