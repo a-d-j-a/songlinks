@@ -1,0 +1,3 @@
+-dontwarn javax.annotation.**
+-keep class com.songlinks.app.api.** { *; }
+-keep class com.songlinks.app.data.local.** { *; }

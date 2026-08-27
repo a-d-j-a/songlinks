@@ -1,0 +1,243 @@
+package com.songlinks.app.ui.navigation
+
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.LibraryMusic
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.songlinks.app.api.SongResult
+import com.songlinks.app.ui.components.MiniPlayer
+import com.songlinks.app.ui.screens.home.HomeScreen
+import com.songlinks.app.ui.screens.library.LibraryScreen
+import com.songlinks.app.ui.screens.player.FullPlayerScreen
+import com.songlinks.app.ui.screens.search.SearchScreen
+import com.songlinks.app.ui.screens.settings.SettingsScreen
+import com.songlinks.app.data.local.PlayerState
+import com.songlinks.app.player.PlayerService
+import com.songlinks.app.ui.theme.Accent
+import com.songlinks.app.ui.theme.OnSurfaceVariant
+import com.songlinks.app.ui.theme.Surface
+import com.songlinks.app.ui.theme.SurfaceVariant
+
+data class BottomNavItem(
+    val route: String,
+    val label: String,
+    val selectedIcon: ImageVector,
+    val unselectedIcon: ImageVector
+)
+
+val bottomNavItems = listOf(
+    BottomNavItem("home", "Home", Icons.Filled.Home, Icons.Outlined.Home),
+    BottomNavItem("search", "Search", Icons.Filled.Search, Icons.Outlined.Search),
+    BottomNavItem("library", "Library", Icons.Filled.LibraryMusic, Icons.Outlined.LibraryMusic),
+    BottomNavItem("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
+)
+
+@Composable
+fun SongLinksNavGraph(playerService: PlayerService? = null) {
+    val navController = rememberNavController()
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var isPlayerExpanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+
+    Scaffold(
+        containerColor = Surface,
+        bottomBar = {
+            Column {
+                val currentSong by PlayerState.currentSong.collectAsState()
+                val isPlaying by PlayerState.isPlaying.collectAsState()
+
+                AnimatedVisibility(
+                    visible = currentSong != null,
+                    enter = slideInVertically(initialOffsetY = { it }),
+                    exit = slideOutVertically(targetOffsetY = { it })
+                ) {
+                    MiniPlayer(
+                        onNavigateToFullPlayer = { isPlayerExpanded = true },
+                        playerService = playerService
+                    )
+                }
+
+                NavigationBar(
+                    containerColor = SurfaceVariant,
+                    tonalElevation = 0.dp
+                ) {
+                    bottomNavItems.forEachIndexed { index, item ->
+                        val isSelected = currentRoute == item.route
+                        NavigationBarItem(
+                            icon = {
+                                Icon(
+                                    imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
+                                    contentDescription = item.label
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = item.label,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            },
+                            selected = isSelected,
+                            onClick = {
+                                selectedTab = index
+                                navController.navigate(item.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = Accent,
+                                selectedTextColor = Accent,
+                                unselectedIconColor = OnSurfaceVariant,
+                                unselectedTextColor = OnSurfaceVariant,
+                                indicatorColor = Accent.copy(alpha = 0.12f)
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = "home",
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            composable("home") {
+                HomeScreen(
+                    onSongClick = { song ->
+                        PlayerState.playSong(song)
+                        playerService?.play(
+                            song.streams.firstOrNull()?.url ?: song.streamUrl,
+                            song.title,
+                            song.artist
+                        )
+                    },
+                    onSearchNavigate = {
+                        selectedTab = 1
+                        navController.navigate("search") {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onOpenInBrowser = { url ->
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }
+                )
+            }
+            composable(
+                route = "search?query={query}",
+                arguments = listOf(
+                    navArgument("query") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    }
+                )
+            ) { backStackEntry ->
+                val query = backStackEntry.arguments?.getString("query") ?: ""
+                SearchScreen(
+                    initialQuery = query,
+                    onSongClick = { song ->
+                        PlayerState.playSong(song)
+                        playerService?.play(
+                            song.streams.firstOrNull()?.url ?: song.streamUrl,
+                            song.title,
+                            song.artist
+                        )
+                    },
+                    onOpenInBrowser = { url ->
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }
+                )
+            }
+            composable("search") {
+                SearchScreen(
+                    initialQuery = "",
+                    onSongClick = { song ->
+                        PlayerState.playSong(song)
+                        playerService?.play(
+                            song.streams.firstOrNull()?.url ?: song.streamUrl,
+                            song.title,
+                            song.artist
+                        )
+                    },
+                    onOpenInBrowser = { url ->
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }
+                )
+            }
+            composable("library") {
+                LibraryScreen(
+                    onSongClick = { song ->
+                        PlayerState.playSong(song)
+                        playerService?.play(
+                            song.streams.firstOrNull()?.url ?: song.streamUrl,
+                            song.title,
+                            song.artist
+                        )
+                    },
+                    onOpenInBrowser = { url ->
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }
+                )
+            }
+            composable("settings") {
+                SettingsScreen()
+            }
+        }
+
+        val currentSong by PlayerState.currentSong.collectAsState()
+        if (isPlayerExpanded && currentSong != null) {
+            FullPlayerScreen(
+                onDismiss = { isPlayerExpanded = false },
+                playerService = playerService
+            )
+        }
+    }
+}
