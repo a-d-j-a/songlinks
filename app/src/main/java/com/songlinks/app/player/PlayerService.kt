@@ -383,7 +383,7 @@ class PlayerService : LifecycleService() {
             )
             .addAction(android.R.drawable.ic_media_next, "Next", nextPendingIntent)
             .setStyle(
-                NotificationCompat.MediaStyle()
+                androidx.media.app.NotificationCompat.MediaStyle()
                     .setShowActionsInCompactView(0, 1, 2)
             )
             .build()
