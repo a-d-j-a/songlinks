@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -23,10 +24,7 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
     val downloads: StateFlow<List<DownloadEntity>> = dao.getAllDownloads()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val totalSize: StateFlow<Long> = downloads
-        .let { flow ->
-            kotlinx.coroutines.flow.map(flow) { list -> list.sumOf { it.fileSize } }
-        }
+    val totalSize: StateFlow<Long> = downloads.map { list -> list.sumOf { it.fileSize } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
     init {
