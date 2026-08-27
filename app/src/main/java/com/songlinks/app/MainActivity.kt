@@ -26,19 +26,19 @@ private const val TAG = "MainActivity"
 
 class MainActivity : ComponentActivity() {
 
-    private var playerService: PlayerService? = null
+    private val playerService = mutableStateOf<PlayerService?>(null)
     private var bound = false
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
             val binder = service as PlayerService.PlayerBinder
-            playerService = binder.getService()
+            playerService.value = binder.getService()
             bound = true
             Log.d(TAG, "Service bound")
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
-            playerService = null
+            playerService.value = null
             bound = false
             Log.d(TAG, "Service unbound")
         }
@@ -114,7 +114,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             SongLinksTheme(darkTheme = darkThemeState.value) {
-                SongLinksNavGraph(playerService = playerService, activity = this@MainActivity)
+                SongLinksNavGraph(playerService = playerService.value, activity = this@MainActivity)
             }
         }
     }
