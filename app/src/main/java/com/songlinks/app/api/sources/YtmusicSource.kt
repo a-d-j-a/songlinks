@@ -61,108 +61,96 @@ object YtmusicSource {
             val body = response.body?.string() ?: ""
             response.close()
 
+            Log.d(TAG, "search() response code: ${response.code}, body length: ${body.length}")
+            if (body.length < 500) Log.d(TAG, "search() body: $body")
+
             if (!response.isSuccessful) {
                 Log.e(TAG, "search() HTTP ${response.code}")
                 return@withContext emptyList()
             }
 
             val json = JsonParser.parseString(body).asJsonObject
-            val contents = json
-                .getAsJsonObject("contents")
-                ?.getAsJsonObject("tabbedSearchResultsRenderer")
-                ?.getAsJsonArray("tabs")
-                ?.get(0)?.asJsonObject
-                ?.getAsJsonObject("tabRenderer")
-                ?.getAsJsonObject("content")
-                ?.getAsJsonObject("sectionListRenderer")
-                ?.getAsJsonArray("contents")
 
             val songs = mutableListOf<SongResult>()
-            if (contents != null) {
-                for (section in contents) {
-                    val shelf = section.asJsonObject?.getAsJsonObject("musicShelfRenderer") ?: continue
-                    val shelfContents = shelf.getAsJsonArray("contents") ?: continue
-                    for (item in shelfContents) {
-                        val flex = item.asJsonObject?.getAsJsonObject("musicResponsiveListItemRenderer") ?: continue
-                        val columns = flex.getAsJsonArray("flexColumns") ?: continue
 
-                        // Video ID from first column
-                        val videoId = columns[0].asJsonObject
-                            ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                            ?.getAsJsonArray("runs")
-                            ?.firstOrNull()?.asJsonObject
-                            ?.getAsJsonObject("navigationEndpoint")
-                            ?.getAsJsonObject("watchEndpoint")
-                            ?.get("videoId")?.asString ?: ""
+            val allItems = collectMusicItems(json)
+            Log.d(TAG, "search() found ${allItems.size} musicResponsiveListItemRenderer items")
 
-                        if (videoId.isBlank()) continue
+            for (item in allItems) {
+                val flex = item
+                val columns = flex.getAsJsonArray("flexColumns") ?: continue
 
-                        // Title from first column
-                        val titleRuns = columns[0].asJsonObject
-                            ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                            ?.getAsJsonArray("runs")
-                        val title = titleRuns
-                            ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
+                val videoId = columns[0].asJsonObject
+                    ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
+                    ?.getAsJsonArray("runs")
+                    ?.mapNotNull { it.asJsonObject }
+                    ?.firstOrNull { r ->
+                        r.getAsJsonObject("navigationEndpoint")?.has("watchEndpoint") == true
+                    }
+                    ?.getAsJsonObject("navigationEndpoint")
+                    ?.getAsJsonObject("watchEndpoint")
+                    ?.get("videoId")?.asString ?: ""
 
-                        if (title.isBlank()) continue
+                if (videoId.isBlank()) continue
 
-                        // Artist from second column
-                        val artistRuns = if (columns.size() > 1)
-                            columns[1].asJsonObject
-                                ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                                ?.getAsJsonArray("runs")
-                        else null
-                        val artist = artistRuns
-                            ?.filter { elem -> elem.asJsonObject.has("navigationEndpoint") }
-                            ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
+                val titleRuns = columns[0].asJsonObject
+                    ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
+                    ?.getAsJsonArray("runs")
+                val title = titleRuns
+                    ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
 
-                        // Album from third column (if exists)
-                        val albumRuns = if (columns.size() > 2)
-                            columns[2].asJsonObject
-                                ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                                ?.getAsJsonArray("runs")
-                        else null
-                        val album = albumRuns
-                            ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
+                if (title.isBlank()) continue
 
-                        // Duration from last column
-                        val durationText = columns.lastOrNull()?.asJsonObject
-                            ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
-                            ?.getAsJsonArray("runs")
-                            ?.firstOrNull()?.asJsonObject
-                            ?.get("text")?.asString ?: "0:00"
-                        val durationSec = parseDuration(durationText)
+                val artistRuns = if (columns.size() > 1)
+                    columns[1].asJsonObject
+                        ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
+                        ?.getAsJsonArray("runs")
+                else null
+                val artist = artistRuns
+                    ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
 
-                        // Thumbnail
-                        val thumbnails = flex.getAsJsonObject("thumbnail")
-                            ?.getAsJsonObject("musicThumbnailRenderer")
-                            ?.getAsJsonObject("thumbnail")
-                            ?.getAsJsonArray("thumbnails")
-                        var coverUrl = ""
-                        if (thumbnails != null && thumbnails.size() > 0) {
-                            coverUrl = thumbnails[thumbnails.size() - 1].asJsonObject.get("url")?.asString ?: ""
-                            if (coverUrl.isNotBlank() && !coverUrl.startsWith("http")) {
-                                coverUrl = "https:$coverUrl"
-                            }
-                        }
+                val albumRuns = if (columns.size() > 2)
+                    columns[2].asJsonObject
+                        ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
+                        ?.getAsJsonArray("runs")
+                else null
+                val album = albumRuns
+                    ?.joinToString("") { elem -> elem.asJsonObject.get("text")?.asString ?: "" } ?: ""
 
-                        songs.add(
-                            SongResult(
-                                source = "ytmusic",
-                                id = "ytmusic_$videoId",
-                                title = title,
-                                artist = artist,
-                                album = album,
-                                duration = durationSec * 1000,
-                                cover = coverUrl,
-                                page = "$YT_BASE/watch?v=$videoId",
-                                streams = emptyList(),
-                                quality = "AAC",
-                                streamUrl = ""
-                            )
-                        )
+                val durationText = columns.lastOrNull()?.asJsonObject
+                    ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
+                    ?.getAsJsonArray("runs")
+                    ?.firstOrNull()?.asJsonObject
+                    ?.get("text")?.asString ?: "0:00"
+                val durationSec = parseDuration(durationText)
+
+                val thumbnails = flex.getAsJsonObject("thumbnail")
+                    ?.getAsJsonObject("musicThumbnailRenderer")
+                    ?.getAsJsonObject("thumbnail")
+                    ?.getAsJsonArray("thumbnails")
+                var coverUrl = ""
+                if (thumbnails != null && thumbnails.size() > 0) {
+                    coverUrl = thumbnails[thumbnails.size() - 1].asJsonObject.get("url")?.asString ?: ""
+                    if (coverUrl.isNotBlank() && !coverUrl.startsWith("http")) {
+                        coverUrl = "https:$coverUrl"
                     }
                 }
+
+                songs.add(
+                    SongResult(
+                        source = "ytmusic",
+                        id = "ytmusic_$videoId",
+                        title = title,
+                        artist = artist,
+                        album = album,
+                        duration = durationSec * 1000,
+                        cover = coverUrl,
+                        page = "$YT_BASE/watch?v=$videoId",
+                        streams = emptyList(),
+                        quality = "AAC",
+                        streamUrl = ""
+                    )
+                )
             }
 
             val result = songs.take(limit)
@@ -231,6 +219,29 @@ object YtmusicSource {
             Log.e(TAG, "getStreamUrl() error for videoId=$videoId", e)
             ""
         }
+    }
+
+    private fun collectMusicItems(obj: com.google.gson.JsonObject): List<com.google.gson.JsonObject> {
+        val result = mutableListOf<com.google.gson.JsonObject>()
+        for (key in obj.keySet()) {
+            val element = obj.get(key) ?: continue
+            when {
+                key == "musicResponsiveListItemRenderer" -> {
+                    result.add(element.asJsonObject)
+                }
+                element.isJsonObject -> {
+                    result.addAll(collectMusicItems(element.asJsonObject))
+                }
+                element.isJsonArray -> {
+                    for (item in element.asJsonArray) {
+                        if (item.isJsonObject) {
+                            result.addAll(collectMusicItems(item.asJsonObject))
+                        }
+                    }
+                }
+            }
+        }
+        return result
     }
 
     private fun parseDuration(text: String): Int {
