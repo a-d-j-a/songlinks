@@ -159,32 +159,32 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
 
     androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
-            containerColor = Surface,
-            bottomBar = {
-                Column {
-                    val currentSong by PlayerState.currentSong.collectAsState()
+        containerColor = Surface,
+        bottomBar = {
+            Column {
+                val currentSong by PlayerState.currentSong.collectAsState()
 
-                    AnimatedVisibility(
-                        visible = currentSong != null && !isPlayerExpanded,
-                        enter = slideInVertically(initialOffsetY = { it }),
-                        exit = slideOutVertically(targetOffsetY = { it })
-                    ) {
-                        MiniPlayer(
-                            onNavigateToFullPlayer = {
-                                Log.d(TAG, "Player expanded")
-                                isPlayerExpanded = true
-                            },
-                            playerService = playerService
-                        )
-                    }
+                AnimatedVisibility(
+                    visible = currentSong != null && !isPlayerExpanded,
+                    enter = slideInVertically(initialOffsetY = { it }),
+                    exit = slideOutVertically(targetOffsetY = { it })
+                ) {
+                    MiniPlayer(
+                        onNavigateToFullPlayer = {
+                            Log.d(TAG, "Player expanded")
+                            isPlayerExpanded = true
+                        },
+                        playerService = playerService
+                    )
+                }
 
-                    AnimatedVisibility(
-                        visible = !isPlayerExpanded,
-                        enter = slideInVertically(initialOffsetY = { it }),
-                        exit = slideOutVertically(targetOffsetY = { it })
-                    ) {
-                        NavigationBar(
-                    containerColor = SurfaceVariant,
+                AnimatedVisibility(
+                    visible = !isPlayerExpanded,
+                    enter = slideInVertically(initialOffsetY = { it }),
+                    exit = slideOutVertically(targetOffsetY = { it })
+                ) {
+                    NavigationBar(
+                        containerColor = SurfaceVariant,
                     tonalElevation = 0.dp
                 ) {
                     bottomNavItems.forEachIndexed { index, item ->
@@ -222,7 +222,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
                             )
                         )
                     }
-                }
+                    }
                 }
             }
         }
@@ -319,14 +319,21 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
             }
         }
 
-        val currentSong by PlayerState.currentSong.collectAsState()
-        if (isPlayerExpanded && currentSong != null) {
+        }
+        // Fullscreen player overlay — outside Scaffold padding, covers bottomBar + MiniPlayer
+        val currentSongOverlay by PlayerState.currentSong.collectAsState()
+        androidx.compose.animation.AnimatedVisibility(
+            visible = isPlayerExpanded && currentSongOverlay != null,
+            enter = slideInVertically(initialOffsetY = { it }),
+            exit = slideOutVertically(targetOffsetY = { it })
+        ) {
             FullPlayerScreen(
                 onDismiss = {
                     Log.d(TAG, "Player collapsed")
                     isPlayerExpanded = false
                 },
                 onNavigateToLyrics = { encodedTitle, encodedArtist ->
+                    isPlayerExpanded = false
                     navController.navigate("lyrics?title=$encodedTitle&artist=$encodedArtist")
                 },
                 playerService = playerService
