@@ -99,6 +99,21 @@ fun FullPlayerScreen(
     var seekPos by remember { mutableStateOf(0f) }
     var isLoading by remember { mutableStateOf(false) }
     val song = currentSong
+    val prefs = remember(context) { context.getSharedPreferences("songlinks_prefs", android.content.Context.MODE_PRIVATE) }
+    val blurStrength = remember { prefs.getFloat("blur_strength", 36f) }
+    val gradientOverlay = remember { prefs.getBoolean("gradient_overlay", true) }
+    val hideThumbnail = remember { prefs.getBoolean("hide_thumbnail", false) }
+    val cropAlbumArt = remember { prefs.getBoolean("crop_album_art", false) }
+    val showCodec = remember { prefs.getBoolean("show_codec", false) }
+    val keepScreenOnPref = remember { prefs.getBoolean("keep_screen_on", false) }
+    val squigglySlider = remember { prefs.getBoolean("squiggly_slider", false) }
+    val canvasEnabled = remember { prefs.getBoolean("canvas_enabled", true) }
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(keepScreenOnPref, isPlaying) {
+        val window = (view.context as? android.app.Activity)?.window
+        if (keepScreenOnPref && isPlaying) window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
 
     LaunchedEffect(song?.id) {
         isLoading = true
@@ -123,31 +138,33 @@ fun FullPlayerScreen(
             .fillMaxSize()
             .background(Color(0xFF0A0A0A))
     ) {
-        // OuterTune/Echo style blurred cover background
-        if (!song?.cover.isNullOrBlank()) {
+        // OuterTune/Echo style blurred cover background wired to prefs
+        if (!song?.cover.isNullOrBlank() && !hideThumbnail) {
             AsyncImage(
                 model = song?.cover,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .blur(36.dp)
+                    .let { if (blurStrength > 0) it.blur(blurStrength.dp) else it }
                     .alpha(0.45f)
             )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF0A0A0A).copy(alpha = 0.25f),
-                                Color(0xFF0A0A0A).copy(alpha = 0.55f),
-                                Color(0xFF0A0A0A).copy(alpha = 0.85f),
-                                Color(0xFF0A0A0A)
+            if (gradientOverlay) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFF0A0A0A).copy(alpha = 0.25f),
+                                    Color(0xFF0A0A0A).copy(alpha = 0.55f),
+                                    Color(0xFF0A0A0A).copy(alpha = 0.85f),
+                                    Color(0xFF0A0A0A)
+                                )
                             )
                         )
-                    )
-            )
+                )
+            }
         } else {
             Box(
                 modifier = Modifier
@@ -191,43 +208,53 @@ fun FullPlayerScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // Album art — Echo max 384dp, OuterTune uniform square, no black inset
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 28.dp)
-                    .aspectRatio(1f)
-                    .shadow(28.dp, RoundedCornerShape(20.dp), ambientColor = Color.Black.copy(alpha = 0.6f), spotColor = Color.Black.copy(alpha = 0.4f))
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF1A1A1A))
-            ) {
-                if (!song?.cover.isNullOrBlank()) {
-                    AsyncImage(
-                        model = song?.cover,
-                        contentDescription = "Album Art",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(20.dp))
-                            .graphicsLayer {
-                                // Subtle scale when paused, no rotation jank
-                                scaleX = if (isPlaying) 1f else 0.98f
-                                scaleY = if (isPlaying) 1f else 0.98f
-                            }
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(GradientStart, GradientEnd))),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.MusicNote, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(72.dp))
+            // Album art — Echo max 384dp, OuterTune uniform square, wired to hideThumbnail/crop/canvas
+            if (!hideThumbnail) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 28.dp)
+                        .aspectRatio(1f)
+                        .shadow(28.dp, RoundedCornerShape(20.dp), ambientColor = Color.Black.copy(alpha = 0.6f), spotColor = Color.Black.copy(alpha = 0.4f))
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0xFF1A1A1A))
+                ) {
+                    if (!song?.cover.isNullOrBlank()) {
+                        AsyncImage(
+                            model = song?.cover,
+                            contentDescription = "Album Art",
+                            contentScale = if (cropAlbumArt) ContentScale.Crop else ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(20.dp))
+                                .graphicsLayer {
+                                    scaleX = if (isPlaying) 1f else 0.98f
+                                    scaleY = if (isPlaying) 1f else 0.98f
+                                }
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(GradientStart, GradientEnd))),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.MusicNote, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(72.dp))
+                        }
+                    }
+                    if (isLoading) {
+                        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+                            LinearProgressIndicator(modifier = Modifier.width(44.dp).height(3.dp).clip(RoundedCornerShape(2.dp)), color = Color.White, trackColor = Color.White.copy(alpha = 0.2f))
+                        }
+                    }
+                    if (canvasEnabled && isPlaying) {
+                        Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.0f)), contentAlignment = Alignment.BottomCenter) {
+                            Text("◉ Canvas", color = Color.White.copy(alpha = 0.5f), fontSize = 10.sp, modifier = Modifier.padding(bottom = 8.dp))
+                        }
                     }
                 }
-                if (isLoading) {
-                    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
-                        LinearProgressIndicator(modifier = Modifier.width(44.dp).height(3.dp).clip(RoundedCornerShape(2.dp)), color = Color.White, trackColor = Color.White.copy(alpha = 0.2f))
-                    }
-                }
+            } else {
+                // Echo Hide Player Thumbnail — minimal spacer
+                Spacer(Modifier.height(12.dp))
+                Icon(Icons.Default.MusicNote, null, tint = Color.White.copy(alpha = 0.15f), modifier = Modifier.size(48.dp))
             }
 
             Spacer(Modifier.height(20.dp))
@@ -242,9 +269,16 @@ fun FullPlayerScreen(
                 Text(song?.artist ?: "Unknown Artist", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             }
 
+            if (showCodec) {
+                Text(
+                    text = song?.quality?.ifBlank { "AAC" } + " • ${if (song?.source == "jiosaavn") "320kbps" else if (song?.source == "ytmusic") "opus 160k" else "stream"}",
+                    color = Accent.copy(alpha = 0.8f), fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+
             Spacer(Modifier.height(16.dp))
 
-            // Seek bar
+            // Seek bar wired to squigglySlider pref
             val progress = if (isSeeking) seekPos else if (duration > 0) (position.toFloat() / duration.toFloat()).coerceIn(0f, 1f) else 0f
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
                 Slider(
@@ -252,7 +286,7 @@ fun FullPlayerScreen(
                     onValueChange = { isSeeking = true; seekPos = it },
                     onValueChangeFinished = { isSeeking = false; playerService?.seekTo((seekPos * duration).toLong()) },
                     valueRange = 0f..1f,
-                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.18f)),
+                    colors = SliderDefaults.colors(thumbColor = if (squigglySlider) Accent else Color.White, activeTrackColor = if (squigglySlider) Accent else Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.18f)),
                     modifier = Modifier.fillMaxWidth().height(20.dp)
                 )
                 Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {

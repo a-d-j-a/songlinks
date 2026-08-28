@@ -7,6 +7,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
@@ -59,7 +60,18 @@ fun SongLinksTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember(context) { context.getSharedPreferences("songlinks_prefs", android.content.Context.MODE_PRIVATE) }
+    val pureBlack = remember { prefs.getBoolean("pure_black", true) }
+    val dynamicColors = remember { prefs.getBoolean("dynamic_colors", false) }
+    val baseScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val colorScheme = when {
+        dynamicColors && darkTheme && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S -> {
+            try { androidx.compose.material3.dynamicDarkColorScheme(context) } catch (_: Exception) { baseScheme }
+        }
+        !pureBlack && darkTheme -> baseScheme.copy(background = Color(0xFF121212), surface = Color(0xFF121212))
+        else -> baseScheme
+    }
 
     val view = LocalView.current
     if (!view.isInEditMode) {
