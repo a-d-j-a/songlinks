@@ -380,7 +380,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                                     for (pl in list) {
                                         val name = pl["name"] as? String ?: continue
                                         // Insert playlist if not exists
-                                        try { app.database.playlistDao().createPlaylist(com.songlinks.app.data.local.PlaylistEntity(name = name)) } catch (_: Exception) {}
+                                        try { app.database.playlistDao().insertPlaylist(com.songlinks.app.data.local.PlaylistEntity(name = name)) } catch (_: Exception) {}
                                     }
                                 } catch (e: Exception) { Log.e(TAG, "playlist restore failed", e) }
                             }
