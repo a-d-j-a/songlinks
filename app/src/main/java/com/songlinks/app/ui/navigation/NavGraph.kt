@@ -99,7 +99,7 @@ private fun playSongFromNav(
     Log.d(TAG, "playSongFromNav: ${song.title} by ${song.artist} (source: ${song.source}, id: ${song.id})")
     val url = song.streams.firstOrNull()?.url?.takeIf { it.isNotBlank() }
         ?: song.streamUrl.takeIf { it.isNotBlank() }
-    if (url.isNotBlank()) {
+    if (!url.isNullOrBlank()) {
         Log.d(TAG, "Playing directly: ${url.take(80)}")
         PlayerState.playSong(song)
         if (playerService != null) {
