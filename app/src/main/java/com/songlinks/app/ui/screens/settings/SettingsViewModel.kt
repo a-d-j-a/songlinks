@@ -262,7 +262,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val app = getApplication<Application>() as SongLinksApp
             val playlists = app.database.playlistDao().getAllPlaylists().first()
             val result = playlists.map { pl ->
-                val songs = try { app.database.playlistDao().getSongsInPlaylist(pl.playlistId).first() } catch (_: Exception) { emptyList() }
+                val songs = try { app.database.playlistDao().getSongsInPlaylist(pl.id).first() } catch (_: Exception) { emptyList() }
                 mapOf("name" to pl.name, "songs" to songs.map { s -> mapOf("id" to s.songId, "title" to s.title, "artist" to s.artist) })
             }
             Gson().toJson(result)
