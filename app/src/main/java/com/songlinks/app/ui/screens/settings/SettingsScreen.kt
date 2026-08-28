@@ -30,6 +30,24 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Crop
+import androidx.compose.material.icons.filled.Contrast
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.DataSaverOn
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Waves
+import androidx.compose.material.icons.filled.Animation
+import androidx.compose.material.icons.filled.Lyrics
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -91,6 +109,27 @@ fun SettingsScreen(
     val downloadWifiOnly by viewModel.downloadWifiOnly.collectAsState()
     val lastBackupDate by viewModel.lastBackupDate.collectAsState()
     val sleepTimerRemaining by com.songlinks.app.data.local.PlayerState.sleepTimerRemaining.collectAsState()
+    val normalizationEnabled by viewModel.normalizationEnabled.collectAsState()
+    val gaplessEnabled by viewModel.gaplessEnabled.collectAsState()
+    val showCodec by viewModel.showCodec.collectAsState()
+    val keepScreenOn by viewModel.keepScreenOn.collectAsState()
+    val hideThumbnail by viewModel.hideThumbnail.collectAsState()
+    val cropAlbumArt by viewModel.cropAlbumArt.collectAsState()
+    val pureBlack by viewModel.pureBlack.collectAsState()
+    val dynamicColors by viewModel.dynamicColors.collectAsState()
+    val uiDensity by viewModel.uiDensity.collectAsState()
+    val dataSaver by viewModel.dataSaver.collectAsState()
+    val bluetoothAutoPlay by viewModel.bluetoothAutoPlay.collectAsState()
+    val pauseOnMute by viewModel.pauseOnMute.collectAsState()
+    val hideVideoSongs by viewModel.hideVideoSongs.collectAsState()
+    val hideYoutubeShorts by viewModel.hideYoutubeShorts.collectAsState()
+    val highRefreshRate by viewModel.highRefreshRate.collectAsState()
+    val squigglySlider by viewModel.squigglySlider.collectAsState()
+    val canvasEnabled by viewModel.canvasEnabled.collectAsState()
+    val lyricsKaraoke by viewModel.lyricsKaraoke.collectAsState()
+    val translateLyrics by viewModel.translateLyrics.collectAsState()
+    val gridLibrary by viewModel.gridLibrary.collectAsState()
+    val showStats by viewModel.showStats.collectAsState()
 
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var showClearAllDialog by remember { mutableStateOf(false) }
@@ -197,6 +236,96 @@ fun SettingsScreen(
                         )
                     }
                 }
+            }
+        }
+
+        item {
+            SettingsSection(title = "PLAYBACK") {
+                SettingsSwitch(title = "Audio Normalization", subtitle = "Loudness normalization (ReplayGain)", icon = Icons.Filled.GraphicEq, checked = normalizationEnabled, onCheckedChange = { viewModel.toggleNormalization() })
+                SettingsSwitch(title = "Gapless Playback", subtitle = "No gap between tracks", icon = Icons.Filled.MergeType, checked = gaplessEnabled, onCheckedChange = { viewModel.toggleGapless() })
+                SettingsSwitch(title = "Show Codec", subtitle = "Show bitrate/codec on player", icon = Icons.Filled.Info, checked = showCodec, onCheckedChange = { viewModel.toggleShowCodec() })
+                SettingsSwitch(title = "Keep Screen On", subtitle = "Prevent screen sleep while playing", icon = Icons.Filled.Visibility, checked = keepScreenOn, onCheckedChange = { viewModel.toggleKeepScreenOn() })
+                SettingsSwitch(title = "Bluetooth Auto-play", subtitle = "Resume when BT connects", icon = Icons.Filled.Bluetooth, checked = bluetoothAutoPlay, onCheckedChange = { viewModel.toggleBluetoothAutoPlay() })
+                SettingsSwitch(title = "Pause on Mute", subtitle = "Auto-pause when muted", icon = Icons.Filled.VolumeOff, checked = pauseOnMute, onCheckedChange = { viewModel.togglePauseOnMute() })
+            }
+        }
+
+        item {
+            SettingsSection(title = "PLAYER UI") {
+                SettingsSwitch(title = "Hide Thumbnail", subtitle = "Minimal player without art", icon = Icons.Filled.VisibilityOff, checked = hideThumbnail, onCheckedChange = { viewModel.toggleHideThumbnail() })
+                SettingsSwitch(title = "Crop Album Art", subtitle = "Fill player art crop", icon = Icons.Filled.Crop, checked = cropAlbumArt, onCheckedChange = { viewModel.toggleCropAlbumArt() })
+                SettingsSwitch(title = "Squiggly Slider", subtitle = "Wavy progress bar", icon = Icons.Filled.GraphicEq, checked = squigglySlider, onCheckedChange = { viewModel.toggleSquigglySlider() })
+                SettingsSwitch(title = "Canvas Animations", subtitle = "Tidal/Spotify canvas", icon = Icons.Filled.GraphicEq, checked = canvasEnabled, onCheckedChange = { viewModel.toggleCanvas() })
+            }
+        }
+
+        item {
+            SettingsSection(title = "DISPLAY") {
+                SettingsSwitch(title = "Pure Black (AMOLED)", subtitle = "True black #000000", icon = Icons.Filled.Contrast, checked = pureBlack, onCheckedChange = { viewModel.togglePureBlack() })
+                SettingsSwitch(title = "Dynamic Colors", subtitle = "Material You from wallpaper", icon = Icons.Filled.Palette, checked = dynamicColors, onCheckedChange = { viewModel.toggleDynamicColors() })
+                SettingsSwitch(title = "High Refresh Rate", subtitle = "120Hz animations", icon = Icons.Filled.Refresh, checked = highRefreshRate, onCheckedChange = { viewModel.toggleHighRefreshRate() })
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Text("UI Density", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                        listOf("compact" to "Compact", "comfortable" to "Comfortable", "spacious" to "Spacious").forEach { (v, l) ->
+                            FilterChip(selected = uiDensity == v, onClick = { viewModel.updateUiDensity(v) }, label = { Text(l) }, shape = RoundedCornerShape(20.dp), modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            SettingsSection(title = "EQUALIZER") {
+                Text("5-Band Equalizer", style = MaterialTheme.typography.bodyMedium, color = TextSecondary, modifier = Modifier.padding(horizontal = 16.dp))
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    val bands = listOf("60Hz", "230Hz", "910Hz", "3.6kHz", "14kHz")
+                    bands.forEach { label ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                            Text(label, style = MaterialTheme.typography.labelSmall, color = OnSurfaceVariant)
+                            // Placeholder slider vertical representation as FilterChip
+                            FilterChip(selected = false, onClick = { }, label = { Text("0dB") }, shape = RoundedCornerShape(8.dp))
+                        }
+                    }
+                }
+                Text("Presets: Normal, Bass Boost, Treble, Vocal", style = MaterialTheme.typography.bodySmall, color = TextSecondary, modifier = Modifier.padding(horizontal = 16.dp))
+            }
+        }
+
+        item {
+            SettingsSection(title = "CACHE") {
+                SettingsInfoRow(icon = Icons.Filled.Info, title = "Cache Limit", value = "500 MB")
+                Text("Clear cache to free storage", style = MaterialTheme.typography.bodySmall, color = TextSecondary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                Button(onClick = { /* TODO clear cache */ }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Accent)) { Text("Clear Cache") }
+            }
+        }
+
+        item {
+            SettingsSection(title = "QUEUE") {
+                val queueReorder by viewModel.queueReorder.collectAsState()
+                SettingsSwitch(title = "Queue Reorder", subtitle = "Drag to reorder queue", icon = Icons.Filled.MergeType, checked = queueReorder, onCheckedChange = { viewModel.toggleQueueReorder() })
+            }
+        }
+
+        item {
+            SettingsSection(title = "NETWORK") {
+                SettingsSwitch(title = "Data Saver", subtitle = "Lower quality on mobile", icon = Icons.Filled.DataSaverOn, checked = dataSaver, onCheckedChange = { viewModel.toggleDataSaver() })
+                SettingsSwitch(title = "Hide Video Songs", subtitle = "Filter video content", icon = Icons.Filled.VideoLibrary, checked = hideVideoSongs, onCheckedChange = { viewModel.toggleHideVideoSongs() })
+                SettingsSwitch(title = "Hide YouTube Shorts", subtitle = "Filter Shorts", icon = Icons.Filled.Block, checked = hideYoutubeShorts, onCheckedChange = { viewModel.toggleHideShorts() })
+            }
+        }
+
+        item {
+            SettingsSection(title = "LYRICS") {
+                SettingsSwitch(title = "Karaoke Mode", subtitle = "Word-by-word highlight", icon = Icons.Filled.MusicNote, checked = lyricsKaraoke, onCheckedChange = { viewModel.toggleLyricsKaraoke() })
+                SettingsSwitch(title = "Translate Lyrics", subtitle = "Google Translate", icon = Icons.Filled.Translate, checked = translateLyrics, onCheckedChange = { viewModel.toggleTranslateLyrics() })
+            }
+        }
+
+        item {
+            SettingsSection(title = "LIBRARY") {
+                SettingsSwitch(title = "Grid Library", subtitle = "2-column grid for saved", icon = Icons.Filled.GridView, checked = gridLibrary, onCheckedChange = { viewModel.toggleGridLibrary() })
+                SettingsSwitch(title = "Show Stats", subtitle = "Top artists & sources", icon = Icons.Filled.BarChart, checked = showStats, onCheckedChange = { viewModel.toggleShowStats() })
             }
         }
 

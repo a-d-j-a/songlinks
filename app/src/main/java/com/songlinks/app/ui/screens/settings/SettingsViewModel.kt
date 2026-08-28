@@ -48,6 +48,56 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     )
     val lastBackupDate: StateFlow<Long> = _lastBackupDate.asStateFlow()
 
+    // --- 30+ Echo/OuterTune features ---
+    private val _normalizationEnabled = MutableStateFlow(prefs.getBoolean("normalization_enabled", false))
+    val normalizationEnabled: StateFlow<Boolean> = _normalizationEnabled.asStateFlow()
+    private val _gaplessEnabled = MutableStateFlow(prefs.getBoolean("gapless_enabled", true))
+    val gaplessEnabled: StateFlow<Boolean> = _gaplessEnabled.asStateFlow()
+    private val _showCodec = MutableStateFlow(prefs.getBoolean("show_codec", false))
+    val showCodec: StateFlow<Boolean> = _showCodec.asStateFlow()
+    private val _keepScreenOn = MutableStateFlow(prefs.getBoolean("keep_screen_on", false))
+    val keepScreenOn: StateFlow<Boolean> = _keepScreenOn.asStateFlow()
+    private val _hideThumbnail = MutableStateFlow(prefs.getBoolean("hide_thumbnail", false))
+    val hideThumbnail: StateFlow<Boolean> = _hideThumbnail.asStateFlow()
+    private val _cropAlbumArt = MutableStateFlow(prefs.getBoolean("crop_album_art", false))
+    val cropAlbumArt: StateFlow<Boolean> = _cropAlbumArt.asStateFlow()
+    private val _pureBlack = MutableStateFlow(prefs.getBoolean("pure_black", true))
+    val pureBlack: StateFlow<Boolean> = _pureBlack.asStateFlow()
+    private val _dynamicColors = MutableStateFlow(prefs.getBoolean("dynamic_colors", false))
+    val dynamicColors: StateFlow<Boolean> = _dynamicColors.asStateFlow()
+    private val _uiDensity = MutableStateFlow(prefs.getString("ui_density", "comfortable") ?: "comfortable")
+    val uiDensity: StateFlow<String> = _uiDensity.asStateFlow()
+    private val _dataSaver = MutableStateFlow(prefs.getBoolean("data_saver", false))
+    val dataSaver: StateFlow<Boolean> = _dataSaver.asStateFlow()
+    private val _bluetoothAutoPlay = MutableStateFlow(prefs.getBoolean("bluetooth_autoplay", true))
+    val bluetoothAutoPlay: StateFlow<Boolean> = _bluetoothAutoPlay.asStateFlow()
+    private val _pauseOnMute = MutableStateFlow(prefs.getBoolean("pause_on_mute", true))
+    val pauseOnMute: StateFlow<Boolean> = _pauseOnMute.asStateFlow()
+    private val _hideVideoSongs = MutableStateFlow(prefs.getBoolean("hide_video_songs", false))
+    val hideVideoSongs: StateFlow<Boolean> = _hideVideoSongs.asStateFlow()
+    private val _hideYoutubeShorts = MutableStateFlow(prefs.getBoolean("hide_shorts", false))
+    val hideYoutubeShorts: StateFlow<Boolean> = _hideYoutubeShorts.asStateFlow()
+    private val _highRefreshRate = MutableStateFlow(prefs.getBoolean("high_refresh_rate", true))
+    val highRefreshRate: StateFlow<Boolean> = _highRefreshRate.asStateFlow()
+    private val _squigglySlider = MutableStateFlow(prefs.getBoolean("squiggly_slider", false))
+    val squigglySlider: StateFlow<Boolean> = _squigglySlider.asStateFlow()
+    private val _canvasEnabled = MutableStateFlow(prefs.getBoolean("canvas_enabled", true))
+    val canvasEnabled: StateFlow<Boolean> = _canvasEnabled.asStateFlow()
+    private val _lyricsKaraoke = MutableStateFlow(prefs.getBoolean("lyrics_karaoke", false))
+    val lyricsKaraoke: StateFlow<Boolean> = _lyricsKaraoke.asStateFlow()
+    private val _translateLyrics = MutableStateFlow(prefs.getBoolean("translate_lyrics", false))
+    val translateLyrics: StateFlow<Boolean> = _translateLyrics.asStateFlow()
+    private val _queueReorder = MutableStateFlow(prefs.getBoolean("queue_reorder", true))
+    val queueReorder: StateFlow<Boolean> = _queueReorder.asStateFlow()
+    private val _gridLibrary = MutableStateFlow(prefs.getBoolean("grid_library", true))
+    val gridLibrary: StateFlow<Boolean> = _gridLibrary.asStateFlow()
+    private val _showStats = MutableStateFlow(prefs.getBoolean("show_stats", true))
+    val showStats: StateFlow<Boolean> = _showStats.asStateFlow()
+    private val _cacheLimit = MutableStateFlow(prefs.getInt("cache_limit_mb", 500))
+    val cacheLimit: StateFlow<Int> = _cacheLimit.asStateFlow()
+    private val _recentLimit = MutableStateFlow(prefs.getInt("recent_limit", 10))
+    val recentLimit: StateFlow<Int> = _recentLimit.asStateFlow()
+
     fun toggleTheme() {
         _isDarkTheme.value = !_isDarkTheme.value
         Log.d(TAG, "toggleTheme: ${_isDarkTheme.value}")
@@ -79,6 +129,32 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         prefs.edit().putBoolean("download_wifi_only", _downloadWifiOnly.value).apply()
     }
 
+    // 30+ feature toggles
+    fun toggleNormalization() { _normalizationEnabled.value = !_normalizationEnabled.value; prefs.edit().putBoolean("normalization_enabled", _normalizationEnabled.value).apply() }
+    fun toggleGapless() { _gaplessEnabled.value = !_gaplessEnabled.value; prefs.edit().putBoolean("gapless_enabled", _gaplessEnabled.value).apply() }
+    fun toggleShowCodec() { _showCodec.value = !_showCodec.value; prefs.edit().putBoolean("show_codec", _showCodec.value).apply() }
+    fun toggleKeepScreenOn() { _keepScreenOn.value = !_keepScreenOn.value; prefs.edit().putBoolean("keep_screen_on", _keepScreenOn.value).apply() }
+    fun toggleHideThumbnail() { _hideThumbnail.value = !_hideThumbnail.value; prefs.edit().putBoolean("hide_thumbnail", _hideThumbnail.value).apply() }
+    fun toggleCropAlbumArt() { _cropAlbumArt.value = !_cropAlbumArt.value; prefs.edit().putBoolean("crop_album_art", _cropAlbumArt.value).apply() }
+    fun togglePureBlack() { _pureBlack.value = !_pureBlack.value; prefs.edit().putBoolean("pure_black", _pureBlack.value).apply() }
+    fun toggleDynamicColors() { _dynamicColors.value = !_dynamicColors.value; prefs.edit().putBoolean("dynamic_colors", _dynamicColors.value).apply() }
+    fun updateUiDensity(v: String) { _uiDensity.value = v; prefs.edit().putString("ui_density", v).apply() }
+    fun toggleDataSaver() { _dataSaver.value = !_dataSaver.value; prefs.edit().putBoolean("data_saver", _dataSaver.value).apply() }
+    fun toggleBluetoothAutoPlay() { _bluetoothAutoPlay.value = !_bluetoothAutoPlay.value; prefs.edit().putBoolean("bluetooth_autoplay", _bluetoothAutoPlay.value).apply() }
+    fun togglePauseOnMute() { _pauseOnMute.value = !_pauseOnMute.value; prefs.edit().putBoolean("pause_on_mute", _pauseOnMute.value).apply() }
+    fun toggleHideVideoSongs() { _hideVideoSongs.value = !_hideVideoSongs.value; prefs.edit().putBoolean("hide_video_songs", _hideVideoSongs.value).apply() }
+    fun toggleHideShorts() { _hideYoutubeShorts.value = !_hideYoutubeShorts.value; prefs.edit().putBoolean("hide_shorts", _hideYoutubeShorts.value).apply() }
+    fun toggleHighRefreshRate() { _highRefreshRate.value = !_highRefreshRate.value; prefs.edit().putBoolean("high_refresh_rate", _highRefreshRate.value).apply() }
+    fun toggleSquigglySlider() { _squigglySlider.value = !_squigglySlider.value; prefs.edit().putBoolean("squiggly_slider", _squigglySlider.value).apply() }
+    fun toggleCanvas() { _canvasEnabled.value = !_canvasEnabled.value; prefs.edit().putBoolean("canvas_enabled", _canvasEnabled.value).apply() }
+    fun toggleLyricsKaraoke() { _lyricsKaraoke.value = !_lyricsKaraoke.value; prefs.edit().putBoolean("lyrics_karaoke", _lyricsKaraoke.value).apply() }
+    fun toggleTranslateLyrics() { _translateLyrics.value = !_translateLyrics.value; prefs.edit().putBoolean("translate_lyrics", _translateLyrics.value).apply() }
+    fun toggleQueueReorder() { _queueReorder.value = !_queueReorder.value; prefs.edit().putBoolean("queue_reorder", _queueReorder.value).apply() }
+    fun toggleGridLibrary() { _gridLibrary.value = !_gridLibrary.value; prefs.edit().putBoolean("grid_library", _gridLibrary.value).apply() }
+    fun toggleShowStats() { _showStats.value = !_showStats.value; prefs.edit().putBoolean("show_stats", _showStats.value).apply() }
+    fun updateCacheLimit(v: Int) { _cacheLimit.value = v; prefs.edit().putInt("cache_limit_mb", v).apply() }
+    fun updateRecentLimit(v: Int) { _recentLimit.value = v; prefs.edit().putInt("recent_limit", v).apply() }
+
     private fun buildBackupMap(): Map<String, String> {
         val recentJson = prefs.getString("recent_searches_json", null)
             ?: prefs.getStringSet("recent_searches", null)?.let { Gson().toJson(it.toList()) } ?: "[]"
@@ -90,7 +166,31 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             "crossfade_duration" to _crossfadeDuration.value.toString(),
             "download_quality" to _downloadQuality.value,
             "download_wifi_only" to _downloadWifiOnly.value.toString(),
-            "dark_theme" to _isDarkTheme.value.toString()
+            "dark_theme" to _isDarkTheme.value.toString(),
+            "normalization_enabled" to _normalizationEnabled.value.toString(),
+            "gapless_enabled" to _gaplessEnabled.value.toString(),
+            "show_codec" to _showCodec.value.toString(),
+            "keep_screen_on" to _keepScreenOn.value.toString(),
+            "hide_thumbnail" to _hideThumbnail.value.toString(),
+            "crop_album_art" to _cropAlbumArt.value.toString(),
+            "pure_black" to _pureBlack.value.toString(),
+            "dynamic_colors" to _dynamicColors.value.toString(),
+            "ui_density" to _uiDensity.value,
+            "data_saver" to _dataSaver.value.toString(),
+            "bluetooth_autoplay" to _bluetoothAutoPlay.value.toString(),
+            "pause_on_mute" to _pauseOnMute.value.toString(),
+            "hide_video_songs" to _hideVideoSongs.value.toString(),
+            "hide_shorts" to _hideYoutubeShorts.value.toString(),
+            "high_refresh_rate" to _highRefreshRate.value.toString(),
+            "squiggly_slider" to _squigglySlider.value.toString(),
+            "canvas_enabled" to _canvasEnabled.value.toString(),
+            "lyrics_karaoke" to _lyricsKaraoke.value.toString(),
+            "translate_lyrics" to _translateLyrics.value.toString(),
+            "queue_reorder" to _queueReorder.value.toString(),
+            "grid_library" to _gridLibrary.value.toString(),
+            "show_stats" to _showStats.value.toString(),
+            "cache_limit_mb" to _cacheLimit.value.toString(),
+            "recent_limit" to _recentLimit.value.toString()
         )
     }
 
@@ -135,6 +235,30 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 backupMap["download_quality"]?.let { editor.putString("download_quality", it); _downloadQuality.value = it }
                 backupMap["download_wifi_only"]?.let { editor.putBoolean("download_wifi_only", it.toBoolean()); _downloadWifiOnly.value = it.toBoolean() }
                 backupMap["dark_theme"]?.let { editor.putBoolean("dark_theme", it.toBoolean()); _isDarkTheme.value = it.toBoolean() }
+                backupMap["normalization_enabled"]?.let { editor.putBoolean("normalization_enabled", it.toBoolean()); _normalizationEnabled.value = it.toBoolean() }
+                backupMap["gapless_enabled"]?.let { editor.putBoolean("gapless_enabled", it.toBoolean()); _gaplessEnabled.value = it.toBoolean() }
+                backupMap["show_codec"]?.let { editor.putBoolean("show_codec", it.toBoolean()); _showCodec.value = it.toBoolean() }
+                backupMap["keep_screen_on"]?.let { editor.putBoolean("keep_screen_on", it.toBoolean()); _keepScreenOn.value = it.toBoolean() }
+                backupMap["hide_thumbnail"]?.let { editor.putBoolean("hide_thumbnail", it.toBoolean()); _hideThumbnail.value = it.toBoolean() }
+                backupMap["crop_album_art"]?.let { editor.putBoolean("crop_album_art", it.toBoolean()); _cropAlbumArt.value = it.toBoolean() }
+                backupMap["pure_black"]?.let { editor.putBoolean("pure_black", it.toBoolean()); _pureBlack.value = it.toBoolean() }
+                backupMap["dynamic_colors"]?.let { editor.putBoolean("dynamic_colors", it.toBoolean()); _dynamicColors.value = it.toBoolean() }
+                backupMap["ui_density"]?.let { editor.putString("ui_density", it); _uiDensity.value = it }
+                backupMap["data_saver"]?.let { editor.putBoolean("data_saver", it.toBoolean()); _dataSaver.value = it.toBoolean() }
+                backupMap["bluetooth_autoplay"]?.let { editor.putBoolean("bluetooth_autoplay", it.toBoolean()); _bluetoothAutoPlay.value = it.toBoolean() }
+                backupMap["pause_on_mute"]?.let { editor.putBoolean("pause_on_mute", it.toBoolean()); _pauseOnMute.value = it.toBoolean() }
+                backupMap["hide_video_songs"]?.let { editor.putBoolean("hide_video_songs", it.toBoolean()); _hideVideoSongs.value = it.toBoolean() }
+                backupMap["hide_shorts"]?.let { editor.putBoolean("hide_shorts", it.toBoolean()); _hideYoutubeShorts.value = it.toBoolean() }
+                backupMap["high_refresh_rate"]?.let { editor.putBoolean("high_refresh_rate", it.toBoolean()); _highRefreshRate.value = it.toBoolean() }
+                backupMap["squiggly_slider"]?.let { editor.putBoolean("squiggly_slider", it.toBoolean()); _squigglySlider.value = it.toBoolean() }
+                backupMap["canvas_enabled"]?.let { editor.putBoolean("canvas_enabled", it.toBoolean()); _canvasEnabled.value = it.toBoolean() }
+                backupMap["lyrics_karaoke"]?.let { editor.putBoolean("lyrics_karaoke", it.toBoolean()); _lyricsKaraoke.value = it.toBoolean() }
+                backupMap["translate_lyrics"]?.let { editor.putBoolean("translate_lyrics", it.toBoolean()); _translateLyrics.value = it.toBoolean() }
+                backupMap["queue_reorder"]?.let { editor.putBoolean("queue_reorder", it.toBoolean()); _queueReorder.value = it.toBoolean() }
+                backupMap["grid_library"]?.let { editor.putBoolean("grid_library", it.toBoolean()); _gridLibrary.value = it.toBoolean() }
+                backupMap["show_stats"]?.let { editor.putBoolean("show_stats", it.toBoolean()); _showStats.value = it.toBoolean() }
+                backupMap["cache_limit_mb"]?.let { it.toIntOrNull()?.let { v -> editor.putInt("cache_limit_mb", v); _cacheLimit.value = v } }
+                backupMap["recent_limit"]?.let { it.toIntOrNull()?.let { v -> editor.putInt("recent_limit", v); _recentLimit.value = v } }
                 // Recent searches: prefer json, fallback pipe
                 val recentJson = backupMap["recent_searches_json"] ?: backupMap["recent_searches"]
                 recentJson?.let { raw ->
@@ -206,6 +330,30 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             _downloadQuality.value = "auto"
             _downloadWifiOnly.value = true
             _lastBackupDate.value = 0L
+            _normalizationEnabled.value = false
+            _gaplessEnabled.value = true
+            _showCodec.value = false
+            _keepScreenOn.value = false
+            _hideThumbnail.value = false
+            _cropAlbumArt.value = false
+            _pureBlack.value = true
+            _dynamicColors.value = false
+            _uiDensity.value = "comfortable"
+            _dataSaver.value = false
+            _bluetoothAutoPlay.value = true
+            _pauseOnMute.value = true
+            _hideVideoSongs.value = false
+            _hideYoutubeShorts.value = false
+            _highRefreshRate.value = true
+            _squigglySlider.value = false
+            _canvasEnabled.value = true
+            _lyricsKaraoke.value = false
+            _translateLyrics.value = false
+            _queueReorder.value = true
+            _gridLibrary.value = true
+            _showStats.value = true
+            _cacheLimit.value = 500
+            _recentLimit.value = 10
         }
     }
 }
