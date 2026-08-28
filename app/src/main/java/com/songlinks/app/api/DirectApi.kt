@@ -98,7 +98,7 @@ object DirectApi {
                 val url = YtmusicSource.getStreamUrl(videoId)
                 if (url.isNotBlank()) {
                     Log.d(TAG, "searchYouTubeForStream() resolved: ${url.take(80)}")
-                    return@withContext url
+                    return url
                 }
             }
             Log.w(TAG, "searchYouTubeForStream() no playable stream found for: $query")
