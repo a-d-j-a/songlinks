@@ -7,7 +7,9 @@ import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
@@ -157,7 +159,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
 
     Log.d(TAG, "SongLinksNavGraph: currentRoute=$currentRoute")
 
-    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
         containerColor = Surface,
         bottomBar = {
