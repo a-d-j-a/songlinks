@@ -75,16 +75,41 @@ object DirectApi {
                     } else ""
                 }
                 songId.startsWith("itunes_") -> {
-                    // iTunes only provides 30s previews; resolve via YouTube Music for full playback
+                    // iTunes only has 30s preview → try high-quality JioSaavn 320kbps first, then YouTube (Old Echo used high quality)
                     if (title.isNotBlank()) {
-                        Log.d(TAG, "resolveStreamUrl() iTunes source, resolving via YouTube for full playback")
-                        searchYouTubeForStream(title, artist)
+                        Log.d(TAG, "resolveStreamUrl() iTunes source, trying JioSaavn 320kbps then YouTube")
+                        val jio = searchJioSaavnForStream(title, artist)
+                        if (jio.isNotBlank()) jio else searchYouTubeForStream(title, artist)
                     } else ""
                 }
                 else -> {
                     try { JiosaavnSource.getStreamUrl(songId) } catch (_: Exception) { "" }
                 }
             }
+        }
+    }
+
+    private suspend fun searchJioSaavnForStream(title: String, artist: String): String {
+        return try {
+            val query = "$title $artist".trim()
+            val results = JiosaavnSource.search(query, 5)
+            for (r in results) {
+                val isPreview = r.quality.contains("preview", ignoreCase = true)
+                if (!isPreview && r.streamUrl.isNotBlank()) {
+                    Log.d(TAG, "searchJioSaavnForStream() found 320kbps: ${r.streamUrl.take(60)}")
+                    return r.streamUrl
+                }
+                val url = r.streams.firstOrNull()?.url?.takeIf { it.isNotBlank() } ?: r.streamUrl
+                if (!isPreview && url.isNotBlank()) {
+                    Log.d(TAG, "searchJioSaavnForStream() found via streams: ${url.take(60)}")
+                    return url
+                }
+            }
+            Log.d(TAG, "searchJioSaavnForStream() no 320kbps for: $query")
+            ""
+        } catch (e: Exception) {
+            Log.e(TAG, "searchJioSaavnForStream() error", e)
+            ""
         }
     }
 

@@ -66,7 +66,7 @@ fun SongCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isPlaying) AccentSurface else Card
         ),
@@ -83,8 +83,8 @@ fun SongCard(
         ) {
             Box(
                 modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(CardBorder)
             ) {
                 if (song.coverUrl.isNotBlank()) {
@@ -96,8 +96,8 @@ fun SongCard(
                         contentDescription = song.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
-                            .size(52.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .size(56.dp)
+                            .clip(RoundedCornerShape(10.dp))
                     )
                 } else {
                     Icon(

@@ -2,11 +2,11 @@ package com.songlinks.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Surface = Color(0xFF0A0A0A)
-val SurfaceVariant = Color(0xFF141414)
-val SurfaceElevated = Color(0xFF1C1C1C)
-val Card = Color(0xFF111111)
-val CardBorder = Color(0xFF1E1E1E)
+val Surface = Color(0xFF000000) // Echo Amoled pure black
+val SurfaceVariant = Color(0xFF121212) // Echo default surface
+val SurfaceElevated = Color(0xFF1E1E1E)
+val Card = Color(0xFF121212) // Echo card
+val CardBorder = Color(0xFF232323)
 
 val Accent = Color(0xFFBB86FC)
 val AccentDim = Color(0xFF9A6FE0)
