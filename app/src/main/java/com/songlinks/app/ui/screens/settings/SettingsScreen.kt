@@ -42,12 +42,10 @@ import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Waves
-import androidx.compose.material.icons.filled.Animation
-import androidx.compose.material.icons.filled.Lyrics
-import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
