@@ -12,7 +12,8 @@ class SongLinksAutoService : MediaLibraryService() {
     private var librarySession: MediaLibrarySession? = null
     override fun onCreate() {
         super.onCreate()
-        librarySession = MediaLibrarySession.Builder(this, PlayerProvider.player, LibrarySessionCallback()).build()
+        val p = PlayerProvider.player ?: return
+        librarySession = MediaLibrarySession.Builder(this, p, LibrarySessionCallback()).build()
     }
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = librarySession
     override fun onDestroy() {
