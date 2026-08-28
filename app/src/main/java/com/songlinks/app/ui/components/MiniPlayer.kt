@@ -66,7 +66,7 @@ fun MiniPlayer(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
         Row(
             modifier = Modifier
@@ -78,17 +78,10 @@ fun MiniPlayer(
                     spotColor = Color.Black.copy(alpha = 0.3f)
                 )
                 .clip(RoundedCornerShape(14.dp))
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(
-                            Color(0xFF1A1A2E),
-                            Color(0xFF16213E)
-                        )
-                    )
-                )
+                .background(Card)
                 .border(
                     width = 1.dp,
-                    color = Color(0xFF2A2A4A),
+                    color = CardBorder,
                     shape = RoundedCornerShape(14.dp)
                 )
                 .clickable(
@@ -159,15 +152,15 @@ fun MiniPlayer(
                     if (isPlaying) playerService?.pause() else playerService?.resume()
                 },
                 modifier = Modifier
-                    .size(42.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
-                    .background(PrimaryDark.copy(alpha = 0.15f))
+                    .background(Color.White.copy(alpha = 0.08f))
             ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                     contentDescription = if (isPlaying) "Pause" else "Play",
-                    tint = PrimaryDark,
-                    modifier = Modifier.size(24.dp)
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
                 )
             }
         }
@@ -180,8 +173,8 @@ fun MiniPlayer(
                 .height(2.dp)
                 .clip(RoundedCornerShape(1.dp))
                 .align(Alignment.BottomCenter),
-            color = PrimaryDark,
-            trackColor = SeekBarTrack.copy(alpha = 0.5f)
+            color = Accent,
+            trackColor = Color.White.copy(alpha = 0.15f)
         )
     }
 }

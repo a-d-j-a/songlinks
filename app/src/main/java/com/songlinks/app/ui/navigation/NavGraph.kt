@@ -112,7 +112,13 @@ private fun playSongFromNav(
     } else {
         val reason = if (isPreview) "preview fallback" else "empty url"
         Log.d(TAG, "Stream URL $reason, resolving via DirectApi for id: ${song.id} title=${song.title}")
-        PlayerState.playSong(song)
+        // For preview, don't set preview as current — show resolving state
+        if (isPreview) {
+            PlayerState.playSong(song.copy(streamUrl = "", quality = "Resolving high quality..."))
+            PlayerState.setPlaying(false)
+        } else {
+            PlayerState.playSong(song)
+        }
         scope.launch(Dispatchers.IO) {
             try {
                 val api = com.songlinks.app.api.DirectApi
@@ -180,13 +186,13 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
                     )
                 }
 
-                AnimatedVisibility(
-                    visible = !isPlayerExpanded,
-                    enter = slideInVertically(initialOffsetY = { it }),
-                    exit = slideOutVertically(targetOffsetY = { it })
-                ) {
-                    NavigationBar(
-                        containerColor = SurfaceVariant,
+                    AnimatedVisibility(
+                        visible = !isPlayerExpanded,
+                        enter = slideInVertically(initialOffsetY = { it }),
+                        exit = slideOutVertically(targetOffsetY = { it })
+                    ) {
+                        NavigationBar(
+                            containerColor = Surface,
                     tonalElevation = 0.dp
                 ) {
                     bottomNavItems.forEachIndexed { index, item ->
