@@ -183,6 +183,41 @@ class PlayerService : LifecycleService() {
             ?: song.streamUrl.takeIf { it.isNotBlank() } ?: ""
     }
 
+    private fun playSongWithResolve(song: SongResult) {
+        val streamUrl = resolveStreamUrl(song)
+        if (streamUrl.isNotBlank()) {
+            Log.d(TAG, "playSongWithResolve() playing: ${song.title} - ${song.artist}")
+            PlayerState.updateDuration((song.duration ?: 0).toLong())
+            play(streamUrl, song.title, song.artist)
+        } else {
+            Log.d(TAG, "playSongWithResolve() no stream URL, resolving via DirectApi for: ${song.title}")
+            PlayerState.updateDuration((song.duration ?: 0).toLong())
+            PlayerState.setPlaying(false)
+            lifecycleScope.launch {
+                try {
+                    val api = com.songlinks.app.api.SongApi(applicationContext)
+                    val resolvedUrl = api.resolveStreamUrl(song.id, song.title, song.artist)
+                    if (resolvedUrl.isNotBlank()) {
+                        val updatedSong = song.copy(
+                            streams = listOf(com.songlinks.app.api.Stream(quality = "stream", url = resolvedUrl)),
+                            streamUrl = resolvedUrl
+                        )
+                        withContext(Dispatchers.Main) {
+                            PlayerState.playSong(updatedSong)
+                            play(resolvedUrl, song.title, song.artist)
+                        }
+                    } else {
+                        Log.w(TAG, "playSongWithResolve() failed to resolve for: ${song.title}")
+                        withContext(Dispatchers.Main) { PlayerState.setPlaying(false) }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "playSongWithResolve() resolve error", e)
+                    withContext(Dispatchers.Main) { PlayerState.setPlaying(false) }
+                }
+            }
+        }
+    }
+
     @OptIn(UnstableApi::class)
     fun play(url: String, title: String, artist: String) {
         if (url.isBlank()) {
@@ -207,14 +242,40 @@ class PlayerService : LifecycleService() {
 
     fun playSong(song: SongResult) {
         val streamUrl = resolveStreamUrl(song)
-        if (streamUrl.isBlank()) {
-            Log.w(TAG, "playSong() no stream URL for: ${song.title} - ${song.artist}")
-            return
+        if (streamUrl.isNotBlank()) {
+            Log.d(TAG, "playSong() ${song.title} - ${song.artist}, streamUrl=${streamUrl.take(80)}")
+            PlayerState.playSong(song)
+            PlayerState.updateDuration((song.duration ?: 0).toLong())
+            play(streamUrl, song.title, song.artist)
+        } else {
+            // No stream URL — resolve asynchronously via DirectApi (YouTube Music fallback)
+            Log.d(TAG, "playSong() no stream URL, resolving via DirectApi for: ${song.title}")
+            PlayerState.playSong(song)
+            PlayerState.updateDuration((song.duration ?: 0).toLong())
+            PlayerState.setPlaying(false)
+            lifecycleScope.launch {
+                try {
+                    val api = com.songlinks.app.api.SongApi(applicationContext)
+                    val resolvedUrl = api.resolveStreamUrl(song.id, song.title, song.artist)
+                    if (resolvedUrl.isNotBlank()) {
+                        val updatedSong = song.copy(
+                            streams = listOf(com.songlinks.app.api.Stream(quality = "stream", url = resolvedUrl)),
+                            streamUrl = resolvedUrl
+                        )
+                        withContext(Dispatchers.Main) {
+                            PlayerState.playSong(updatedSong)
+                            play(resolvedUrl, song.title, song.artist)
+                        }
+                    } else {
+                        Log.w(TAG, "playSong() failed to resolve stream for: ${song.title}")
+                        withContext(Dispatchers.Main) { PlayerState.setPlaying(false) }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "playSong() resolve error", e)
+                    withContext(Dispatchers.Main) { PlayerState.setPlaying(false) }
+                }
+            }
         }
-        Log.d(TAG, "playSong() ${song.title} - ${song.artist}, streamUrl=${streamUrl.take(80)}")
-        PlayerState.playSong(song)
-        PlayerState.updateDuration((song.duration ?: 0).toLong())
-        play(streamUrl, song.title, song.artist)
     }
 
     fun pause() {
@@ -262,14 +323,7 @@ class PlayerService : LifecycleService() {
         PlayerState.next()
         val newSong = PlayerState.currentSong.value
         if (newSong != null) {
-            val streamUrl = resolveStreamUrl(newSong)
-            if (streamUrl.isNotBlank()) {
-                Log.d(TAG, "skipToNext() playing: ${newSong.title} - ${newSong.artist}")
-                play(streamUrl, newSong.title, newSong.artist)
-            } else {
-                Log.w(TAG, "skipToNext() no stream URL for: ${newSong.title} - ${newSong.artist}")
-                pause()
-            }
+            playSongWithResolve(newSong)
         } else {
             Log.d(TAG, "skipToNext() no next song, pausing")
             pause()
@@ -280,7 +334,6 @@ class PlayerService : LifecycleService() {
         Log.d(TAG, "skipToPrevious()")
         val currentQueue = PlayerState.queue.value
         if (currentQueue.isEmpty()) return
-        // If position >3s, just seek to start instead of changing track
         if (PlayerState.position.value > 3000L) {
             seekTo(0L)
             exoPlayer?.seekTo(0L)
@@ -289,13 +342,7 @@ class PlayerService : LifecycleService() {
         PlayerState.previous()
         val newSong = PlayerState.currentSong.value
         if (newSong != null) {
-            val streamUrl = resolveStreamUrl(newSong)
-            if (streamUrl.isNotBlank()) {
-                Log.d(TAG, "skipToPrevious() playing: ${newSong.title} - ${newSong.artist}")
-                play(streamUrl, newSong.title, newSong.artist)
-            } else {
-                Log.w(TAG, "skipToPrevious() no stream URL for: ${newSong.title} - ${newSong.artist}")
-            }
+            playSongWithResolve(newSong)
         }
     }
 
@@ -305,13 +352,7 @@ class PlayerService : LifecycleService() {
         val safeIndex = startIndex.coerceIn(songs.indices)
         PlayerState.playQueue(songs, safeIndex)
         val song = songs[safeIndex]
-        val streamUrl = resolveStreamUrl(song)
-        if (streamUrl.isNotBlank()) {
-            PlayerState.updateDuration((song.duration ?: 0).toLong())
-            play(streamUrl, song.title, song.artist)
-        } else {
-            Log.w(TAG, "setQueueAndPlay() no stream URL for ${song.title}")
-        }
+        playSongWithResolve(song)
     }
 
     private fun onTrackComplete() {
@@ -339,12 +380,9 @@ class PlayerService : LifecycleService() {
             PlayerState.next()
             val newSong = PlayerState.currentSong.value
             if (newSong != null) {
-                val streamUrl = resolveStreamUrl(newSong)
-                if (streamUrl.isNotBlank()) {
-                    Log.d(TAG, "onTrackComplete() playing next: ${newSong.title} - ${newSong.artist}")
-                    play(streamUrl, newSong.title, newSong.artist)
-                    return
-                }
+                Log.d(TAG, "onTrackComplete() playing next: ${newSong.title} - ${newSong.artist}")
+                playSongWithResolve(newSong)
+                return
             }
         }
 
@@ -352,11 +390,8 @@ class PlayerService : LifecycleService() {
             Log.d(TAG, "onTrackComplete() repeat all, replaying first song")
             val firstSong = currentQueue[0]
             PlayerState.playQueue(currentQueue, 0)
-            val streamUrl = resolveStreamUrl(firstSong)
-            if (streamUrl.isNotBlank()) {
-                play(streamUrl, firstSong.title, firstSong.artist)
-                return
-            }
+            playSongWithResolve(firstSong)
+            return
         }
 
         Log.d(TAG, "onTrackComplete() no more tracks, stopping")

@@ -178,12 +178,14 @@ object JiosaavnSource {
     suspend fun getStreamUrl(songId: String): String = withContext(kotlinx.coroutines.Dispatchers.IO) {
         try {
             val encodedId = URLEncoder.encode(songId, "UTF-8")
-            val url = "$JIOSAAVN_API?__call=song.get&cc=in&includeMediaTags=1&songId=$encodedId"
+            // Use song.get which returns encrypted_media_url directly
+            val url = "$JIOSAAVN_API?__call=song.get&cc=in&includeMediaTags=1&songId=$encodedId&_format=json&_marker=0"
             Log.d(TAG, "getStreamUrl() URL: $url")
 
             val request = Request.Builder()
                 .url(url)
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                .header("Accept", "application/json")
                 .get()
                 .build()
 
@@ -191,21 +193,43 @@ object JiosaavnSource {
             val body = response.body?.string() ?: ""
             response.close()
 
+            Log.d(TAG, "getStreamUrl() HTTP ${response.code}, body length=${body.length}")
+
             if (!response.isSuccessful) {
                 Log.e(TAG, "getStreamUrl() HTTP ${response.code}")
                 return@withContext ""
             }
 
             val json = try { JsonParser.parseString(body).asJsonObject } catch (_: Exception) { null }
-            var encryptedUrl = json?.get("encrypted_media_url")?.asString ?: ""
-            if (encryptedUrl.isBlank() && json != null) {
-                // Try nested: songId -> object, or inside "songs" array
+            if (json == null) {
+                Log.e(TAG, "getStreamUrl() failed to parse JSON")
+                return@withContext ""
+            }
+
+            // song.get can return the song object directly at the top level
+            var encryptedUrl = json.get("encrypted_media_url")?.asString ?: ""
+
+            // Try nested under songId key
+            if (encryptedUrl.isBlank()) {
                 encryptedUrl = json.getAsJsonObject(songId)?.get("encrypted_media_url")?.asString ?: ""
-                if (encryptedUrl.isBlank()) {
-                    json.getAsJsonArray("songs")?.forEach { el ->
-                        val u = el.asJsonObject.get("encrypted_media_url")?.asString
+            }
+
+            // Try inside "songs" array
+            if (encryptedUrl.isBlank()) {
+                json.getAsJsonArray("songs")?.forEach { el ->
+                    val obj = el.asJsonObject
+                    val id = obj.get("id")?.asString ?: obj.get("songid")?.asString ?: ""
+                    if (id == songId || id.isBlank()) {
+                        val u = obj.get("encrypted_media_url")?.asString
                         if (!u.isNullOrBlank()) encryptedUrl = u
                     }
+                }
+            }
+
+            // Try more_info
+            if (encryptedUrl.isBlank()) {
+                json.getAsJsonObject("more_info")?.get("encrypted_media_url")?.asString?.let {
+                    if (it.isNotBlank()) encryptedUrl = it
                 }
             }
 
@@ -215,9 +239,17 @@ object JiosaavnSource {
                     Log.d(TAG, "getStreamUrl() success for songId=$songId")
                     return@withContext decrypted
                 }
+                Log.w(TAG, "getStreamUrl() decrypted URL invalid: ${decrypted.take(80)}")
             }
 
-            Log.w(TAG, "getStreamUrl() no stream URL for songId=$songId")
+            // Fallback: try vlink from more_info (30s preview)
+            val vlink = json.getAsJsonObject("more_info")?.get("vlink")?.asString ?: ""
+            if (vlink.isNotBlank() && vlink.startsWith("http")) {
+                Log.d(TAG, "getStreamUrl() using vlink preview for songId=$songId")
+                return@withContext vlink
+            }
+
+            Log.w(TAG, "getStreamUrl() no stream URL for songId=$songId, encryptedUrl=${encryptedUrl.take(20)}")
             ""
         } catch (e: Exception) {
             Log.e(TAG, "getStreamUrl() error for songId=$songId", e)

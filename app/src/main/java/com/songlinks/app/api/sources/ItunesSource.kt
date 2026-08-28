@@ -80,6 +80,7 @@ object ItunesSource {
                             val previewUrl = obj.get("previewUrl")?.asString ?: ""
                             val pageUrl = obj.get("trackViewUrl")?.asString ?: ""
 
+                            // iTunes only provides 30s previews — store the preview URL directly
                             songs.add(
                                 SongResult(
                                     source = "itunes",
@@ -90,8 +91,8 @@ object ItunesSource {
                                     duration = durationMs,
                                     cover = artworkUrl,
                                     page = pageUrl,
-                                    streams = if (previewUrl.isNotBlank()) listOf(Stream(quality = "AAC", url = previewUrl)) else emptyList(),
-                                    quality = if (previewUrl.isNotBlank()) "AAC" else "",
+                                    streams = if (previewUrl.isNotBlank()) listOf(Stream(quality = "AAC preview", url = previewUrl)) else emptyList(),
+                                    quality = if (previewUrl.isNotBlank()) "AAC preview" else "",
                                     streamUrl = previewUrl
                                 )
                             )

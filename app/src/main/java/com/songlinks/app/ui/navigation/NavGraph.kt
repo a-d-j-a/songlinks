@@ -49,7 +49,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.songlinks.app.api.SongApi
 import com.songlinks.app.ui.components.MiniPlayer
 import com.songlinks.app.ui.screens.downloads.DownloadsScreen
 import com.songlinks.app.ui.screens.foryou.ForYouScreen
@@ -98,7 +97,8 @@ private fun playSongFromNav(
     context: Context
 ) {
     Log.d(TAG, "playSongFromNav: ${song.title} by ${song.artist} (source: ${song.source}, id: ${song.id})")
-    val url = song.streams.firstOrNull()?.url ?: song.streamUrl
+    val url = song.streams.firstOrNull()?.url?.takeIf { it.isNotBlank() }
+        ?: song.streamUrl.takeIf { it.isNotBlank() }
     if (url.isNotBlank()) {
         Log.d(TAG, "Playing directly: ${url.take(80)}")
         PlayerState.playSong(song)
@@ -108,15 +108,18 @@ private fun playSongFromNav(
             Log.w(TAG, "playerService is null, cannot play")
         }
     } else {
-        Log.d(TAG, "Stream URL empty, resolving for id: ${song.id}")
+        Log.d(TAG, "Stream URL empty, resolving via DirectApi for id: ${song.id}")
         PlayerState.playSong(song)
         scope.launch(Dispatchers.IO) {
             try {
-                val api = SongApi(context)
-                val resolvedUrl = api.resolveStreamUrl(song.id)
+                val api = com.songlinks.app.api.DirectApi
+                val resolvedUrl = api.resolveStreamUrl(song.id, song.title, song.artist)
                 Log.d(TAG, "Resolved URL: ${resolvedUrl.take(80)}")
                 if (resolvedUrl.isNotBlank()) {
-                    val updatedSong = song.copy(streams = listOf(com.songlinks.app.api.Stream(quality = song.quality.ifBlank { "AAC" }, url = resolvedUrl)), streamUrl = resolvedUrl)
+                    val updatedSong = song.copy(
+                        streams = listOf(com.songlinks.app.api.Stream(quality = song.quality.ifBlank { "stream" }, url = resolvedUrl)),
+                        streamUrl = resolvedUrl
+                    )
                     withContext(Dispatchers.Main) {
                         PlayerState.playSong(updatedSong)
                         if (playerService != null) {

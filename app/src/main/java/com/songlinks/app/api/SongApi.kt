@@ -14,9 +14,9 @@ class SongApi(private val context: Context) {
         return DirectApi.search(query, sources)
     }
 
-    suspend fun resolveStreamUrl(songId: String): String {
-        Log.d(TAG, "resolveStreamUrl() id=$songId")
-        return DirectApi.resolveStreamUrl(songId)
+    suspend fun resolveStreamUrl(songId: String, title: String = "", artist: String = ""): String {
+        Log.d(TAG, "resolveStreamUrl() id=$songId title=$title artist=$artist")
+        return DirectApi.resolveStreamUrl(songId, title, artist)
     }
 
     suspend fun getLyrics(title: String, artist: String): LyricsResponse {

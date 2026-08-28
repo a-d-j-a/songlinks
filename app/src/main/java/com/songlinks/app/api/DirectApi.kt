@@ -48,33 +48,64 @@ object DirectApi {
         }
     }
 
-    suspend fun resolveStreamUrl(songId: String): String {
-        Log.d(TAG, "resolveStreamUrl() id=$songId")
+    suspend fun resolveStreamUrl(songId: String, title: String = "", artist: String = ""): String {
+        Log.d(TAG, "resolveStreamUrl() id=$songId title=$title artist=$artist")
         return withContext(Dispatchers.IO) {
             when {
                 songId.startsWith("ytmusic_") -> {
                     val videoId = songId.removePrefix("ytmusic_")
-                    YtmusicSource.getStreamUrl(videoId)
+                    val url = YtmusicSource.getStreamUrl(videoId)
+                    if (url.isNotBlank()) url
+                    else {
+                        // Cipher might have failed, try searching YouTube Music by title+artist
+                        if (title.isNotBlank()) {
+                            Log.d(TAG, "resolveStreamUrl() YT direct failed, searching by title")
+                            val fallback = searchYouTubeForStream(title, artist)
+                            fallback
+                        } else ""
+                    }
                 }
                 songId.startsWith("jiosaavn_") -> {
                     val id = songId.removePrefix("jiosaavn_")
-                    JiosaavnSource.getStreamUrl(id)
+                    val url = JiosaavnSource.getStreamUrl(id)
+                    if (url.isNotBlank()) url
+                    else if (title.isNotBlank()) {
+                        Log.d(TAG, "resolveStreamUrl() JioSaavn direct failed, searching YouTube")
+                        searchYouTubeForStream(title, artist)
+                    } else ""
                 }
                 songId.startsWith("itunes_") -> {
-                    val trackId = songId.removePrefix("itunes_")
-                    try {
-                        val results = ItunesSource.search(trackId, 1)
-                        results.firstOrNull { it.id == songId }?.streamUrl ?: results.firstOrNull()?.streamUrl ?: ""
-                    } catch (e: Exception) {
-                        Log.e(TAG, "itunes resolve failed", e)
-                        ""
-                    }
+                    // iTunes only provides 30s previews; resolve via YouTube Music for full playback
+                    if (title.isNotBlank()) {
+                        Log.d(TAG, "resolveStreamUrl() iTunes source, resolving via YouTube for full playback")
+                        searchYouTubeForStream(title, artist)
+                    } else ""
                 }
                 else -> {
-                    // Bare jiosaavn id fallback (backwards compat)
                     try { JiosaavnSource.getStreamUrl(songId) } catch (_: Exception) { "" }
                 }
             }
+        }
+    }
+
+    private suspend fun searchYouTubeForStream(title: String, artist: String): String {
+        return try {
+            val query = "$title $artist".trim()
+            val results = YtmusicSource.search(query, 5)
+            for (result in results) {
+                val videoId = result.id.removePrefix("ytmusic_")
+                if (videoId.isBlank()) continue
+                val url = YtmusicSource.getStreamUrl(videoId)
+                if (url.isNotBlank()) {
+                    Log.d(TAG, "searchYouTubeForStream() resolved: ${url.take(80)}")
+                    return@withContext url
+                }
+            }
+            Log.w(TAG, "searchYouTubeForStream() no playable stream found for: $query")
+            ""
+        } catch (e: Exception) {
+            Log.e(TAG, "searchYouTubeForStream() error", e)
+            ""
         }
     }
 
