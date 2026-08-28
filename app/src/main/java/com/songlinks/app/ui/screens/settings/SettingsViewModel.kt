@@ -97,6 +97,36 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val cacheLimit: StateFlow<Int> = _cacheLimit.asStateFlow()
     private val _recentLimit = MutableStateFlow(prefs.getInt("recent_limit", 10))
     val recentLimit: StateFlow<Int> = _recentLimit.asStateFlow()
+    private val _localMediaScan = MutableStateFlow(prefs.getBoolean("local_media_scan", false))
+    val localMediaScan: StateFlow<Boolean> = _localMediaScan.asStateFlow()
+    private val _podcastEnabled = MutableStateFlow(prefs.getBoolean("podcast_enabled", false))
+    val podcastEnabled: StateFlow<Boolean> = _podcastEnabled.asStateFlow()
+    private val _spotifyImport = MutableStateFlow(prefs.getBoolean("spotify_import", false))
+    val spotifyImport: StateFlow<Boolean> = _spotifyImport.asStateFlow()
+    private val _listenTogether = MutableStateFlow(prefs.getBoolean("listen_together", false))
+    val listenTogether: StateFlow<Boolean> = _listenTogether.asStateFlow()
+    private val _blurStrength = MutableStateFlow(prefs.getFloat("blur_strength", 36f))
+    val blurStrength: StateFlow<Float> = _blurStrength.asStateFlow()
+    private val _gradientOverlay = MutableStateFlow(prefs.getBoolean("gradient_overlay", true))
+    val gradientOverlay: StateFlow<Boolean> = _gradientOverlay.asStateFlow()
+    private val _showLyricsOnPlayer = MutableStateFlow(prefs.getBoolean("show_lyrics_player", false))
+    val showLyricsOnPlayer: StateFlow<Boolean> = _showLyricsOnPlayer.asStateFlow()
+    private val _autoDownloadWifi = MutableStateFlow(prefs.getBoolean("auto_download_wifi", false))
+    val autoDownloadWifi: StateFlow<Boolean> = _autoDownloadWifi.asStateFlow()
+    private val _deleteAfter30Days = MutableStateFlow(prefs.getBoolean("delete_after_30d", false))
+    val deleteAfter30Days: StateFlow<Boolean> = _deleteAfter30Days.asStateFlow()
+    private val _sortBy = MutableStateFlow(prefs.getString("sort_by", "recent") ?: "recent")
+    val sortBy: StateFlow<String> = _sortBy.asStateFlow()
+    private val _groupBy = MutableStateFlow(prefs.getString("group_by", "none") ?: "none")
+    val groupBy: StateFlow<String> = _groupBy.asStateFlow()
+    private val _showYear = MutableStateFlow(prefs.getBoolean("show_year", true))
+    val showYear: StateFlow<Boolean> = _showYear.asStateFlow()
+    private val _showFileSize = MutableStateFlow(prefs.getBoolean("show_file_size", false))
+    val showFileSize: StateFlow<Boolean> = _showFileSize.asStateFlow()
+    private val _tempoPitch = MutableStateFlow(prefs.getBoolean("tempo_pitch", false))
+    val tempoPitch: StateFlow<Boolean> = _tempoPitch.asStateFlow()
+    private val _androidAuto = MutableStateFlow(prefs.getBoolean("android_auto", true))
+    val androidAuto: StateFlow<Boolean> = _androidAuto.asStateFlow()
 
     fun toggleTheme() {
         _isDarkTheme.value = !_isDarkTheme.value
@@ -154,6 +184,21 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun toggleShowStats() { _showStats.value = !_showStats.value; prefs.edit().putBoolean("show_stats", _showStats.value).apply() }
     fun updateCacheLimit(v: Int) { _cacheLimit.value = v; prefs.edit().putInt("cache_limit_mb", v).apply() }
     fun updateRecentLimit(v: Int) { _recentLimit.value = v; prefs.edit().putInt("recent_limit", v).apply() }
+    fun toggleLocalMediaScan() { _localMediaScan.value = !_localMediaScan.value; prefs.edit().putBoolean("local_media_scan", _localMediaScan.value).apply() }
+    fun togglePodcast() { _podcastEnabled.value = !_podcastEnabled.value; prefs.edit().putBoolean("podcast_enabled", _podcastEnabled.value).apply() }
+    fun toggleSpotifyImport() { _spotifyImport.value = !_spotifyImport.value; prefs.edit().putBoolean("spotify_import", _spotifyImport.value).apply() }
+    fun toggleListenTogether() { _listenTogether.value = !_listenTogether.value; prefs.edit().putBoolean("listen_together", _listenTogether.value).apply() }
+    fun updateBlurStrength(v: Float) { _blurStrength.value = v; prefs.edit().putFloat("blur_strength", v).apply() }
+    fun toggleGradientOverlay() { _gradientOverlay.value = !_gradientOverlay.value; prefs.edit().putBoolean("gradient_overlay", _gradientOverlay.value).apply() }
+    fun toggleShowLyricsOnPlayer() { _showLyricsOnPlayer.value = !_showLyricsOnPlayer.value; prefs.edit().putBoolean("show_lyrics_player", _showLyricsOnPlayer.value).apply() }
+    fun toggleAutoDownloadWifi() { _autoDownloadWifi.value = !_autoDownloadWifi.value; prefs.edit().putBoolean("auto_download_wifi", _autoDownloadWifi.value).apply() }
+    fun toggleDeleteAfter30Days() { _deleteAfter30Days.value = !_deleteAfter30Days.value; prefs.edit().putBoolean("delete_after_30d", _deleteAfter30Days.value).apply() }
+    fun updateSortBy(v: String) { _sortBy.value = v; prefs.edit().putString("sort_by", v).apply() }
+    fun updateGroupBy(v: String) { _groupBy.value = v; prefs.edit().putString("group_by", v).apply() }
+    fun toggleShowYear() { _showYear.value = !_showYear.value; prefs.edit().putBoolean("show_year", _showYear.value).apply() }
+    fun toggleShowFileSize() { _showFileSize.value = !_showFileSize.value; prefs.edit().putBoolean("show_file_size", _showFileSize.value).apply() }
+    fun toggleTempoPitch() { _tempoPitch.value = !_tempoPitch.value; prefs.edit().putBoolean("tempo_pitch", _tempoPitch.value).apply() }
+    fun toggleAndroidAuto() { _androidAuto.value = !_androidAuto.value; prefs.edit().putBoolean("android_auto", _androidAuto.value).apply() }
 
     private fun buildBackupMap(): Map<String, String> {
         val recentJson = prefs.getString("recent_searches_json", null)
