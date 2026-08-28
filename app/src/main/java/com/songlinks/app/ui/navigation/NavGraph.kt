@@ -178,25 +178,24 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
                         )
                     }
 
-                    // Hide bottom nav when player is fullscreen
                     AnimatedVisibility(
                         visible = !isPlayerExpanded,
                         enter = slideInVertically(initialOffsetY = { it }),
                         exit = slideOutVertically(targetOffsetY = { it })
                     ) {
                         NavigationBar(
-                            containerColor = SurfaceVariant,
-                            tonalElevation = 0.dp
-                        ) {
-                            bottomNavItems.forEachIndexed { index, item ->
-                                val isSelected = currentRoute == item.route || (item.route == "search" && currentRoute?.startsWith("search") == true)
-                                NavigationBarItem(
-                                    icon = {
-                                        Icon(
-                                            imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
-                                            contentDescription = item.label
-                                        )
-                                    },
+                    containerColor = SurfaceVariant,
+                    tonalElevation = 0.dp
+                ) {
+                    bottomNavItems.forEachIndexed { index, item ->
+                        val isSelected = currentRoute == item.route || (item.route == "search" && currentRoute?.startsWith("search") == true)
+                        NavigationBarItem(
+                            icon = {
+                                Icon(
+                                    imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
+                                    contentDescription = item.label
+                                )
+                            },
                             label = {
                                 Text(
                                     text = item.label,
@@ -223,6 +222,7 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
                             )
                         )
                     }
+                }
                 }
             }
         }
@@ -319,21 +319,14 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
             }
         }
 
-        }
-        // Fullscreen player overlay — outside Scaffold padding, covers bottomBar + MiniPlayer
-        val currentSongOverlay by PlayerState.currentSong.collectAsState()
-        androidx.compose.animation.AnimatedVisibility(
-            visible = isPlayerExpanded && currentSongOverlay != null,
-            enter = slideInVertically(initialOffsetY = { it }),
-            exit = slideOutVertically(targetOffsetY = { it })
-        ) {
+        val currentSong by PlayerState.currentSong.collectAsState()
+        if (isPlayerExpanded && currentSong != null) {
             FullPlayerScreen(
                 onDismiss = {
                     Log.d(TAG, "Player collapsed")
                     isPlayerExpanded = false
                 },
                 onNavigateToLyrics = { encodedTitle, encodedArtist ->
-                    isPlayerExpanded = false
                     navController.navigate("lyrics?title=$encodedTitle&artist=$encodedArtist")
                 },
                 playerService = playerService
