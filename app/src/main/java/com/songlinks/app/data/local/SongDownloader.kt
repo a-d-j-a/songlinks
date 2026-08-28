@@ -21,6 +21,12 @@ class SongDownloader(
 
     suspend fun downloadSong(song: SongResult, streamUrl: String): DownloadEntity =
         withContext(Dispatchers.IO) {
+            // Ensure full stream, not preview: resolve via YouTube if preview/itunes
+            val isPreview = song.quality.contains("preview", ignoreCase = true) || song.source.equals("itunes", ignoreCase = true)
+            val finalUrl = if (isPreview || streamUrl.isBlank()) {
+                try { com.songlinks.app.api.DirectApi.resolveStreamUrl(song.id, song.title, song.artist).takeIf { it.isNotBlank() } ?: streamUrl } catch (_: Exception) { streamUrl }
+            } else streamUrl
+            if (finalUrl.isBlank()) throw Exception("No playable stream for download")
             val downloadsDir = File(appContext.filesDir, "downloads")
             if (!downloadsDir.exists()) {
                 if (!downloadsDir.mkdirs() && !downloadsDir.exists()) {
@@ -34,7 +40,7 @@ class SongDownloader(
             val file = File(downloadsDir, fileName)
             val tmpFile = File(downloadsDir, "$fileName.tmp")
 
-            val request = Request.Builder().url(streamUrl).build()
+            val request = Request.Builder().url(finalUrl).build()
             val response = client.newCall(request).execute()
 
             if (!response.isSuccessful) {

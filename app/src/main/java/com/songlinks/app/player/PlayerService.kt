@@ -185,13 +185,15 @@ class PlayerService : LifecycleService() {
     }
 
     private fun playSongWithResolve(song: SongResult) {
-        val streamUrl = resolveStreamUrl(song)
+        val isPreview = song.quality.contains("preview", ignoreCase = true) || song.source.equals("itunes", ignoreCase = true)
+        val streamUrl = if (isPreview) "" else resolveStreamUrl(song)
         if (streamUrl.isNotBlank()) {
             Log.d(TAG, "playSongWithResolve() playing: ${song.title} - ${song.artist}")
             PlayerState.updateDuration((song.duration ?: 0).toLong())
             play(streamUrl, song.title, song.artist)
         } else {
-            Log.d(TAG, "playSongWithResolve() no stream URL, resolving via DirectApi for: ${song.title}")
+            val reason = if (isPreview) "preview fallback" else "no stream URL"
+            Log.d(TAG, "playSongWithResolve() $reason, resolving via DirectApi for: ${song.title}")
             PlayerState.updateDuration((song.duration ?: 0).toLong())
             PlayerState.setPlaying(false)
             lifecycleScope.launch {
@@ -200,8 +202,10 @@ class PlayerService : LifecycleService() {
                     val resolvedUrl = api.resolveStreamUrl(song.id, song.title, song.artist)
                     if (resolvedUrl.isNotBlank()) {
                         val updatedSong = song.copy(
-                            streams = listOf(com.songlinks.app.api.Stream(quality = "stream", url = resolvedUrl)),
-                            streamUrl = resolvedUrl
+                            source = if (isPreview) "ytmusic" else song.source,
+                            streams = listOf(com.songlinks.app.api.Stream(quality = if (isPreview) "AAC" else "stream", url = resolvedUrl)),
+                            streamUrl = resolvedUrl,
+                            quality = if (isPreview) "AAC" else song.quality
                         )
                         withContext(Dispatchers.Main) {
                             PlayerState.playSong(updatedSong)
@@ -242,15 +246,16 @@ class PlayerService : LifecycleService() {
     }
 
     fun playSong(song: SongResult) {
-        val streamUrl = resolveStreamUrl(song)
+        val isPreview = song.quality.contains("preview", ignoreCase = true) || song.source.equals("itunes", ignoreCase = true)
+        val streamUrl = if (isPreview) "" else resolveStreamUrl(song)
         if (streamUrl.isNotBlank()) {
             Log.d(TAG, "playSong() ${song.title} - ${song.artist}, streamUrl=${streamUrl.take(80)}")
             PlayerState.playSong(song)
             PlayerState.updateDuration((song.duration ?: 0).toLong())
             play(streamUrl, song.title, song.artist)
         } else {
-            // No stream URL — resolve asynchronously via DirectApi (YouTube Music fallback)
-            Log.d(TAG, "playSong() no stream URL, resolving via DirectApi for: ${song.title}")
+            val reason = if (isPreview) "preview fallback" else "no stream URL"
+            Log.d(TAG, "playSong() $reason, resolving via DirectApi for: ${song.title}")
             PlayerState.playSong(song)
             PlayerState.updateDuration((song.duration ?: 0).toLong())
             PlayerState.setPlaying(false)
@@ -260,8 +265,10 @@ class PlayerService : LifecycleService() {
                     val resolvedUrl = api.resolveStreamUrl(song.id, song.title, song.artist)
                     if (resolvedUrl.isNotBlank()) {
                         val updatedSong = song.copy(
-                            streams = listOf(com.songlinks.app.api.Stream(quality = "stream", url = resolvedUrl)),
-                            streamUrl = resolvedUrl
+                            source = if (isPreview) "ytmusic" else song.source,
+                            streams = listOf(com.songlinks.app.api.Stream(quality = if (isPreview) "AAC" else "stream", url = resolvedUrl)),
+                            streamUrl = resolvedUrl,
+                            quality = if (isPreview) "AAC" else song.quality
                         )
                         withContext(Dispatchers.Main) {
                             PlayerState.playSong(updatedSong)

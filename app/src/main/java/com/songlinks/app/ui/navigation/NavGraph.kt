@@ -97,18 +97,19 @@ private fun playSongFromNav(
     context: Context
 ) {
     Log.d(TAG, "playSongFromNav: ${song.title} by ${song.artist} (source: ${song.source}, id: ${song.id})")
-    val url = song.streams.firstOrNull()?.url?.takeIf { it.isNotBlank() }
-        ?: song.streamUrl.takeIf { it.isNotBlank() }
-    if (!url.isNullOrBlank()) {
-        Log.d(TAG, "Playing directly: ${url.take(80)}")
+    val isPreview = song.quality.contains("preview", ignoreCase = true) || song.source.equals("itunes", ignoreCase = true)
+    val directUrl = if (isPreview) null else (song.streams.firstOrNull()?.url?.takeIf { it.isNotBlank() } ?: song.streamUrl.takeIf { it.isNotBlank() })
+    if (!directUrl.isNullOrBlank()) {
+        Log.d(TAG, "Playing directly: ${directUrl.take(80)}")
         PlayerState.playSong(song)
         if (playerService != null) {
-            playerService.play(url, song.title, song.artist)
+            playerService.play(directUrl, song.title, song.artist)
         } else {
             Log.w(TAG, "playerService is null, cannot play")
         }
     } else {
-        Log.d(TAG, "Stream URL empty, resolving via DirectApi for id: ${song.id}")
+        val reason = if (isPreview) "preview fallback" else "empty url"
+        Log.d(TAG, "Stream URL $reason, resolving via DirectApi for id: ${song.id} title=${song.title}")
         PlayerState.playSong(song)
         scope.launch(Dispatchers.IO) {
             try {
@@ -116,9 +117,12 @@ private fun playSongFromNav(
                 val resolvedUrl = api.resolveStreamUrl(song.id, song.title, song.artist)
                 Log.d(TAG, "Resolved URL: ${resolvedUrl.take(80)}")
                 if (resolvedUrl.isNotBlank()) {
+                    val isFallback = song.quality.contains("preview", ignoreCase = true) || song.source.equals("itunes", ignoreCase = true)
                     val updatedSong = song.copy(
-                        streams = listOf(com.songlinks.app.api.Stream(quality = song.quality.ifBlank { "stream" }, url = resolvedUrl)),
-                        streamUrl = resolvedUrl
+                        source = if (isFallback) "ytmusic" else song.source,
+                        streams = listOf(com.songlinks.app.api.Stream(quality = if (isFallback) "AAC" else song.quality.ifBlank { "stream" }, url = resolvedUrl)),
+                        streamUrl = resolvedUrl,
+                        quality = if (isFallback) "AAC" else song.quality
                     )
                     withContext(Dispatchers.Main) {
                         PlayerState.playSong(updatedSong)
@@ -153,39 +157,46 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
 
     Log.d(TAG, "SongLinksNavGraph: currentRoute=$currentRoute")
 
-    Scaffold(
-        containerColor = Surface,
-        bottomBar = {
-            Column {
-                val currentSong by PlayerState.currentSong.collectAsState()
+    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            containerColor = Surface,
+            bottomBar = {
+                Column {
+                    val currentSong by PlayerState.currentSong.collectAsState()
 
-                AnimatedVisibility(
-                    visible = currentSong != null,
-                    enter = slideInVertically(initialOffsetY = { it }),
-                    exit = slideOutVertically(targetOffsetY = { it })
-                ) {
-                    MiniPlayer(
-                        onNavigateToFullPlayer = {
-                            Log.d(TAG, "Player expanded")
-                            isPlayerExpanded = true
-                        },
-                        playerService = playerService
-                    )
-                }
-
-                NavigationBar(
-                    containerColor = SurfaceVariant,
-                    tonalElevation = 0.dp
-                ) {
-                    bottomNavItems.forEachIndexed { index, item ->
-                        val isSelected = currentRoute == item.route || (item.route == "search" && currentRoute?.startsWith("search") == true)
-                        NavigationBarItem(
-                            icon = {
-                                Icon(
-                                    imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
-                                    contentDescription = item.label
-                                )
+                    AnimatedVisibility(
+                        visible = currentSong != null && !isPlayerExpanded,
+                        enter = slideInVertically(initialOffsetY = { it }),
+                        exit = slideOutVertically(targetOffsetY = { it })
+                    ) {
+                        MiniPlayer(
+                            onNavigateToFullPlayer = {
+                                Log.d(TAG, "Player expanded")
+                                isPlayerExpanded = true
                             },
+                            playerService = playerService
+                        )
+                    }
+
+                    // Hide bottom nav when player is fullscreen
+                    AnimatedVisibility(
+                        visible = !isPlayerExpanded,
+                        enter = slideInVertically(initialOffsetY = { it }),
+                        exit = slideOutVertically(targetOffsetY = { it })
+                    ) {
+                        NavigationBar(
+                            containerColor = SurfaceVariant,
+                            tonalElevation = 0.dp
+                        ) {
+                            bottomNavItems.forEachIndexed { index, item ->
+                                val isSelected = currentRoute == item.route || (item.route == "search" && currentRoute?.startsWith("search") == true)
+                                NavigationBarItem(
+                                    icon = {
+                                        Icon(
+                                            imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
+                                            contentDescription = item.label
+                                        )
+                                    },
                             label = {
                                 Text(
                                     text = item.label,
@@ -308,14 +319,21 @@ fun SongLinksNavGraph(playerService: PlayerService? = null, activity: com.songli
             }
         }
 
-        val currentSong by PlayerState.currentSong.collectAsState()
-        if (isPlayerExpanded && currentSong != null) {
+        }
+        // Fullscreen player overlay — outside Scaffold padding, covers bottomBar + MiniPlayer
+        val currentSongOverlay by PlayerState.currentSong.collectAsState()
+        androidx.compose.animation.AnimatedVisibility(
+            visible = isPlayerExpanded && currentSongOverlay != null,
+            enter = slideInVertically(initialOffsetY = { it }),
+            exit = slideOutVertically(targetOffsetY = { it })
+        ) {
             FullPlayerScreen(
                 onDismiss = {
                     Log.d(TAG, "Player collapsed")
                     isPlayerExpanded = false
                 },
                 onNavigateToLyrics = { encodedTitle, encodedArtist ->
+                    isPlayerExpanded = false
                     navController.navigate("lyrics?title=$encodedTitle&artist=$encodedArtist")
                 },
                 playerService = playerService
