@@ -134,6 +134,7 @@ fun SettingsScreen(
     var sleepTimerMinutes by remember { mutableLongStateOf(0L) }
     var customMinutes by remember { mutableStateOf("") }
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     LazyColumn(
         modifier = Modifier
@@ -467,16 +468,18 @@ fun SettingsScreen(
 
                 Button(
                     onClick = {
-                        val json = viewModel.getExportJson()
-                        if (activity != null) {
-                            activity.launchExport { uri ->
-                                try {
-                                    val ctx = activity.applicationContext
-                                    ctx.contentResolver.openOutputStream(uri)?.use { out ->
-                                        out.write(json.toByteArray())
-                                    }
-                                    viewModel.onExportComplete()
-                                } catch (e: Exception) { android.util.Log.e("SettingsScreen", "export failed", e) }
+                        scope.launch {
+                            val json = viewModel.getExportJson()
+                            if (activity != null) {
+                                activity.launchExport { uri ->
+                                    try {
+                                        val ctx = activity.applicationContext
+                                        ctx.contentResolver.openOutputStream(uri)?.use { out ->
+                                            out.write(json.toByteArray())
+                                        }
+                                        viewModel.onExportComplete()
+                                    } catch (e: Exception) { android.util.Log.e("SettingsScreen", "export failed", e) }
+                                }
                             }
                         }
                     },

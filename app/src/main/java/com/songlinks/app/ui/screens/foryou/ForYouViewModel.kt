@@ -42,9 +42,23 @@ class ForYouViewModel(application: Application) : AndroidViewModel(application) 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    private val _playlists = MutableStateFlow<List<String>>(emptyList())
+    val playlists: StateFlow<List<String>> = _playlists.asStateFlow()
+
     init {
         loadHistory()
         loadRecommendations()
+        loadPlaylists()
+    }
+
+    private fun loadPlaylists() {
+        viewModelScope.launch {
+            try {
+                val app = getApplication() as com.songlinks.app.SongLinksApp
+                val pls = app.database.playlistDao().getAllPlaylists()
+                _playlists.value = pls.map { it.name }
+            } catch (_: Exception) {}
+        }
     }
 
     private fun loadHistory() {

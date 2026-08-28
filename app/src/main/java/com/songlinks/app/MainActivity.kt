@@ -55,7 +55,7 @@ class MainActivity : ComponentActivity() {
     }
 
     val exportLauncher = registerForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
+        ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri: Uri? ->
         if (uri != null) {
             onExportUri?.invoke(uri)
@@ -77,12 +77,12 @@ class MainActivity : ComponentActivity() {
 
     fun launchExport(onResult: (Uri) -> Unit) {
         onExportUri = onResult
-        exportLauncher.launch("songlinks_backup.json")
+        exportLauncher.launch("songlinks_backup.backup")
     }
 
     fun launchImport(onResult: (Uri) -> Unit) {
         onImportUri = onResult
-        importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+        importLauncher.launch(arrayOf("application/octet-stream", "application/json", "text/plain", "*/*"))
     }
 
     private val darkThemeState = mutableStateOf(true)

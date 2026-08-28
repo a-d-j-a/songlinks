@@ -175,6 +175,38 @@ fun ForYouScreen(
                 }
             }
 
+            val playlists by viewModel.playlists.collectAsState()
+            if (playlists.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        icon = Icons.Filled.Star,
+                        title = "Your Playlists"
+                    )
+                }
+                item {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(playlists, key = { it }) { name ->
+                            Card(
+                                modifier = Modifier.width(160.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = ThemeCard),
+                                border = BorderStroke(1.dp, CardBorder)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Filled.Star, null, tint = Accent, modifier = Modifier.size(32.dp))
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text("${playlists.size} playlists", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             if (isLoading) {
                 item {
                     Box(

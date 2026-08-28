@@ -200,7 +200,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun toggleTempoPitch() { _tempoPitch.value = !_tempoPitch.value; prefs.edit().putBoolean("tempo_pitch", _tempoPitch.value).apply() }
     fun toggleAndroidAuto() { _androidAuto.value = !_androidAuto.value; prefs.edit().putBoolean("android_auto", _androidAuto.value).apply() }
 
-    private fun buildBackupMap(): Map<String, String> {
+    private fun buildBackupMap(playlistsJson: String = "[]"): Map<String, String> {
         val recentJson = prefs.getString("recent_searches_json", null)
             ?: prefs.getStringSet("recent_searches", null)?.let { Gson().toJson(it.toList()) } ?: "[]"
         return mapOf(
@@ -250,29 +250,45 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             "show_year" to _showYear.value.toString(),
             "show_file_size" to _showFileSize.value.toString(),
             "tempo_pitch" to _tempoPitch.value.toString(),
-            "android_auto" to _androidAuto.value.toString()
+            "android_auto" to _androidAuto.value.toString(),
+            "playlists" to playlistsJson,
+            "version" to "2.0"
         )
+    }
+
+    private suspend fun getPlaylistsJson(): String = withContext(Dispatchers.IO) {
+        try {
+            val app = getApplication<Application>() as SongLinksApp
+            val playlists = app.database.playlistDao().getAllPlaylists()
+            val result = playlists.map { pl ->
+                val songs = try { app.database.playlistDao().getPlaylistSongs(pl.playlistId) } catch (_: Exception) { emptyList() }
+                mapOf("name" to pl.name, "songs" to songs.map { s -> mapOf("id" to s.songId, "title" to s.title, "artist" to s.artist) })
+            }
+            Gson().toJson(result)
+        } catch (e: Exception) { Log.e(TAG, "getPlaylistsJson failed", e); "[]" }
     }
 
     fun exportBackup() {
         Log.d(TAG, "exportBackup: saving local data to SharedPreferences backup")
         viewModelScope.launch {
             try {
-                val backupMap = buildBackupMap()
+                val playlistsJson = getPlaylistsJson()
+                val backupMap = buildBackupMap(playlistsJson)
                 val json = Gson().toJson(backupMap)
                 prefs.edit().putString("local_backup", json).apply()
                 _lastBackupDate.value = System.currentTimeMillis()
                 prefs.edit().putLong("last_backup_date", _lastBackupDate.value).apply()
-                Log.d(TAG, "exportBackup: success, timestamp=${_lastBackupDate.value}")
+                Log.d(TAG, "exportBackup: success with playlists, timestamp=${_lastBackupDate.value}")
             } catch (e: Exception) {
                 Log.e(TAG, "exportBackup failed", e)
             }
         }
     }
 
-    fun getExportJson(): String {
+    suspend fun getExportJson(): String {
         Log.d(TAG, "getExportJson")
-        return Gson().toJson(buildBackupMap())
+        val playlistsJson = getPlaylistsJson()
+        return Gson().toJson(buildBackupMap(playlistsJson))
     }
 
     fun onExportComplete() {
@@ -347,6 +363,28 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                             editor.remove("recent_searches")
                         }
                     } catch (_: Exception) {}
+                }
+                // Playlists: restore to DB (adjust For You accordingly)
+                backupMap["playlists"]?.let { playlistsStr ->
+                    if (playlistsStr.isNotBlank() && playlistsStr != "[]") {
+                        try {
+                            val type = object : TypeToken<List<Map<String, Any>>>() {}.type
+                            val list: List<Map<String, Any>> = Gson().fromJson(playlistsStr, type) ?: emptyList()
+                            // Store count for For You to reflect
+                            editor.putInt("backup_playlists_count", list.size)
+                            // Actual DB restore handled async below
+                            kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                                try {
+                                    val app = getApplication<Application>() as SongLinksApp
+                                    for (pl in list) {
+                                        val name = pl["name"] as? String ?: continue
+                                        // Insert playlist if not exists
+                                        try { app.database.playlistDao().createPlaylist(com.songlinks.app.data.local.PlaylistEntity(name = name)) } catch (_: Exception) {}
+                                    }
+                                } catch (e: Exception) { Log.e(TAG, "playlist restore failed", e) }
+                            }
+                        } catch (_: Exception) {}
+                    }
                 }
                 editor.apply()
                 _lastBackupDate.value = System.currentTimeMillis()
