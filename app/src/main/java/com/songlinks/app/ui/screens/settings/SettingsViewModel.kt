@@ -235,7 +235,22 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             "grid_library" to _gridLibrary.value.toString(),
             "show_stats" to _showStats.value.toString(),
             "cache_limit_mb" to _cacheLimit.value.toString(),
-            "recent_limit" to _recentLimit.value.toString()
+            "recent_limit" to _recentLimit.value.toString(),
+            "local_media_scan" to _localMediaScan.value.toString(),
+            "podcast_enabled" to _podcastEnabled.value.toString(),
+            "spotify_import" to _spotifyImport.value.toString(),
+            "listen_together" to _listenTogether.value.toString(),
+            "blur_strength" to _blurStrength.value.toString(),
+            "gradient_overlay" to _gradientOverlay.value.toString(),
+            "show_lyrics_player" to _showLyricsOnPlayer.value.toString(),
+            "auto_download_wifi" to _autoDownloadWifi.value.toString(),
+            "delete_after_30d" to _deleteAfter30Days.value.toString(),
+            "sort_by" to _sortBy.value,
+            "group_by" to _groupBy.value,
+            "show_year" to _showYear.value.toString(),
+            "show_file_size" to _showFileSize.value.toString(),
+            "tempo_pitch" to _tempoPitch.value.toString(),
+            "android_auto" to _androidAuto.value.toString()
         )
     }
 
@@ -304,6 +319,21 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 backupMap["show_stats"]?.let { editor.putBoolean("show_stats", it.toBoolean()); _showStats.value = it.toBoolean() }
                 backupMap["cache_limit_mb"]?.let { it.toIntOrNull()?.let { v -> editor.putInt("cache_limit_mb", v); _cacheLimit.value = v } }
                 backupMap["recent_limit"]?.let { it.toIntOrNull()?.let { v -> editor.putInt("recent_limit", v); _recentLimit.value = v } }
+                backupMap["local_media_scan"]?.let { editor.putBoolean("local_media_scan", it.toBoolean()); _localMediaScan.value = it.toBoolean() }
+                backupMap["podcast_enabled"]?.let { editor.putBoolean("podcast_enabled", it.toBoolean()); _podcastEnabled.value = it.toBoolean() }
+                backupMap["spotify_import"]?.let { editor.putBoolean("spotify_import", it.toBoolean()); _spotifyImport.value = it.toBoolean() }
+                backupMap["listen_together"]?.let { editor.putBoolean("listen_together", it.toBoolean()); _listenTogether.value = it.toBoolean() }
+                backupMap["blur_strength"]?.let { it.toFloatOrNull()?.let { v -> editor.putFloat("blur_strength", v); _blurStrength.value = v } }
+                backupMap["gradient_overlay"]?.let { editor.putBoolean("gradient_overlay", it.toBoolean()); _gradientOverlay.value = it.toBoolean() }
+                backupMap["show_lyrics_player"]?.let { editor.putBoolean("show_lyrics_player", it.toBoolean()); _showLyricsOnPlayer.value = it.toBoolean() }
+                backupMap["auto_download_wifi"]?.let { editor.putBoolean("auto_download_wifi", it.toBoolean()); _autoDownloadWifi.value = it.toBoolean() }
+                backupMap["delete_after_30d"]?.let { editor.putBoolean("delete_after_30d", it.toBoolean()); _deleteAfter30Days.value = it.toBoolean() }
+                backupMap["sort_by"]?.let { editor.putString("sort_by", it); _sortBy.value = it }
+                backupMap["group_by"]?.let { editor.putString("group_by", it); _groupBy.value = it }
+                backupMap["show_year"]?.let { editor.putBoolean("show_year", it.toBoolean()); _showYear.value = it.toBoolean() }
+                backupMap["show_file_size"]?.let { editor.putBoolean("show_file_size", it.toBoolean()); _showFileSize.value = it.toBoolean() }
+                backupMap["tempo_pitch"]?.let { editor.putBoolean("tempo_pitch", it.toBoolean()); _tempoPitch.value = it.toBoolean() }
+                backupMap["android_auto"]?.let { editor.putBoolean("android_auto", it.toBoolean()); _androidAuto.value = it.toBoolean() }
                 // Recent searches: prefer json, fallback pipe
                 val recentJson = backupMap["recent_searches_json"] ?: backupMap["recent_searches"]
                 recentJson?.let { raw ->
@@ -399,6 +429,21 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             _showStats.value = true
             _cacheLimit.value = 500
             _recentLimit.value = 10
+            _localMediaScan.value = false
+            _podcastEnabled.value = false
+            _spotifyImport.value = false
+            _listenTogether.value = false
+            _blurStrength.value = 36f
+            _gradientOverlay.value = true
+            _showLyricsOnPlayer.value = false
+            _autoDownloadWifi.value = false
+            _deleteAfter30Days.value = false
+            _sortBy.value = "recent"
+            _groupBy.value = "none"
+            _showYear.value = true
+            _showFileSize.value = false
+            _tempoPitch.value = false
+            _androidAuto.value = true
         }
     }
 }

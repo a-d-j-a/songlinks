@@ -328,6 +328,55 @@ fun SettingsScreen(
         }
 
         item {
+            SettingsSection(title = "LOCAL & PODCAST") {
+                val localScan by viewModel.localMediaScan.collectAsState()
+                val podcast by viewModel.podcastEnabled.collectAsState()
+                val spotify by viewModel.spotifyImport.collectAsState()
+                val listen by viewModel.listenTogether.collectAsState()
+                SettingsSwitch(title = "Local Media Scan", subtitle = "Play device MP3/FLAC", icon = Icons.Filled.MusicNote, checked = localScan, onCheckedChange = { viewModel.toggleLocalMediaScan() })
+                SettingsSwitch(title = "Podcast Support", subtitle = "Podcasts alongside music", icon = Icons.Filled.MusicNote, checked = podcast, onCheckedChange = { viewModel.togglePodcast() })
+                SettingsSwitch(title = "Import from Spotify", subtitle = "Bring playlists", icon = Icons.Filled.MusicNote, checked = spotify, onCheckedChange = { viewModel.toggleSpotifyImport() })
+                SettingsSwitch(title = "Listen Together", subtitle = "Sync like Spotify Jam", icon = Icons.Filled.MusicNote, checked = listen, onCheckedChange = { viewModel.toggleListenTogether() })
+            }
+        }
+
+        item {
+            SettingsSection(title = "PLAYER EXTRAS") {
+                val blur by viewModel.blurStrength.collectAsState()
+                val gradient by viewModel.gradientOverlay.collectAsState()
+                val lyricsOnPlayer by viewModel.showLyricsOnPlayer.collectAsState()
+                val tempo by viewModel.tempoPitch.collectAsState()
+                SettingsSwitch(title = "Gradient Overlay", subtitle = "Dark gradient on player", icon = Icons.Filled.Palette, checked = gradient, onCheckedChange = { viewModel.toggleGradientOverlay() })
+                SettingsSwitch(title = "Show Lyrics on Player", subtitle = "Inline lyrics", icon = Icons.Filled.MusicNote, checked = lyricsOnPlayer, onCheckedChange = { viewModel.toggleShowLyricsOnPlayer() })
+                SettingsSwitch(title = "Tempo/Pitch", subtitle = "Speed & pitch control", icon = Icons.Filled.GraphicEq, checked = tempo, onCheckedChange = { viewModel.toggleTempoPitch() })
+                Text("Blur Strength: ${blur.toInt()}dp", style = MaterialTheme.typography.bodySmall, color = TextSecondary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+                Slider(value = blur, onValueChange = { viewModel.updateBlurStrength(it) }, valueRange = 0f..60f, colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent))
+            }
+        }
+
+        item {
+            SettingsSection(title = "STORAGE") {
+                val autoDl by viewModel.autoDownloadWifi.collectAsState()
+                val del30 by viewModel.deleteAfter30Days.collectAsState()
+                val showYear by viewModel.showYear.collectAsState()
+                val showSize by viewModel.showFileSize.collectAsState()
+                val androidAuto by viewModel.androidAuto.collectAsState()
+                SettingsSwitch(title = "Auto Download on WiFi", subtitle = "Cache favorites", icon = Icons.Filled.Download, checked = autoDl, onCheckedChange = { viewModel.toggleAutoDownloadWifi() })
+                SettingsSwitch(title = "Delete after 30 days", subtitle = "Auto clean old", icon = Icons.Filled.DeleteSweep, checked = del30, onCheckedChange = { viewModel.toggleDeleteAfter30Days() })
+                SettingsSwitch(title = "Show Year", subtitle = "Release year on cards", icon = Icons.Filled.Info, checked = showYear, onCheckedChange = { viewModel.toggleShowYear() })
+                SettingsSwitch(title = "Show File Size", subtitle = "Size on downloads", icon = Icons.Filled.Info, checked = showSize, onCheckedChange = { viewModel.toggleShowFileSize() })
+                SettingsSwitch(title = "Android Auto", subtitle = "Car support", icon = Icons.Filled.Info, checked = androidAuto, onCheckedChange = { viewModel.toggleAndroidAuto() })
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    val sortBy by viewModel.sortBy.collectAsState()
+                    Text("Sort By", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+                        listOf("recent" to "Recent", "title" to "Title", "artist" to "Artist").forEach { (v,l) -> FilterChip(selected = sortBy==v, onClick = { viewModel.updateSortBy(v) }, label = { Text(l) }, shape = RoundedCornerShape(20.dp), modifier = Modifier.weight(1f)) }
+                    }
+                }
+            }
+        }
+
+        item {
             SettingsSection(title = "DOWNLOADS") {
                 Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                     Row(
