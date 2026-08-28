@@ -13,6 +13,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import android.util.Log
 import kotlinx.coroutines.launch
 
@@ -55,7 +56,7 @@ class ForYouViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             try {
                 val app = getApplication() as com.songlinks.app.SongLinksApp
-                val pls = app.database.playlistDao().getAllPlaylists()
+                val pls = app.database.playlistDao().getAllPlaylists().first()
                 _playlists.value = pls.map { it.name }
             } catch (_: Exception) {}
         }

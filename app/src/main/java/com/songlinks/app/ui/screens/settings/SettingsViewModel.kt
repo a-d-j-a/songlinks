@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -259,9 +260,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private suspend fun getPlaylistsJson(): String = withContext(Dispatchers.IO) {
         try {
             val app = getApplication<Application>() as SongLinksApp
-            val playlists = app.database.playlistDao().getAllPlaylists()
+            val playlists = app.database.playlistDao().getAllPlaylists().first()
             val result = playlists.map { pl ->
-                val songs = try { app.database.playlistDao().getPlaylistSongs(pl.playlistId) } catch (_: Exception) { emptyList() }
+                val songs = try { app.database.playlistDao().getSongsInPlaylist(pl.playlistId).first() } catch (_: Exception) { emptyList() }
                 mapOf("name" to pl.name, "songs" to songs.map { s -> mapOf("id" to s.songId, "title" to s.title, "artist" to s.artist) })
             }
             Gson().toJson(result)

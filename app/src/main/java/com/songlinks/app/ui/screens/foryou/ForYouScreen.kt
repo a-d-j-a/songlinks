@@ -74,6 +74,7 @@ fun ForYouScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val error by viewModel.error.collectAsState()
+    val playlists by viewModel.playlists.collectAsState()
 
     val hasHistory = recentlyPlayed.isNotEmpty() || topArtists.isNotEmpty()
 
@@ -175,7 +176,6 @@ fun ForYouScreen(
                 }
             }
 
-            val playlists by viewModel.playlists.collectAsState()
             if (playlists.isNotEmpty()) {
                 item {
                     SectionHeader(
