@@ -92,23 +92,19 @@ fun HomeScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .background(com.songlinks.app.ui.theme.Surface)
                     .padding(horizontal = 20.dp, vertical = 16.dp)
             ) {
                 Text(
-                    text = "SongLinks",
-                    style = MaterialTheme.typography.headlineMedium,
+                    text = "Home",
+                    style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
-                    color = com.songlinks.app.ui.theme.Accent
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = greeting,
-                    style = MaterialTheme.typography.titleLarge,
                     color = TextPrimary
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Discover your music",
-                    style = MaterialTheme.typography.bodyLarge,
+                    text = greeting,
+                    style = MaterialTheme.typography.titleMedium,
                     color = TextSecondary
                 )
             }
