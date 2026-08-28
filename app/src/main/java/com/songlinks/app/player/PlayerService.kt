@@ -194,6 +194,9 @@ class PlayerService : LifecycleService() {
         } else {
             val reason = if (isPreview) "preview fallback" else "no stream URL"
             Log.d(TAG, "playSongWithResolve() $reason, resolving via DirectApi for: ${song.title}")
+            if (isPreview) {
+                PlayerState.playSong(song.copy(quality = "Resolving high quality...", streamUrl = "", streams = emptyList()))
+            }
             PlayerState.updateDuration((song.duration ?: 0).toLong())
             PlayerState.setPlaying(false)
             lifecycleScope.launch {
@@ -203,9 +206,9 @@ class PlayerService : LifecycleService() {
                     if (resolvedUrl.isNotBlank()) {
                         val updatedSong = song.copy(
                             source = if (isPreview) "ytmusic" else song.source,
-                            streams = listOf(com.songlinks.app.api.Stream(quality = if (isPreview) "AAC" else "stream", url = resolvedUrl)),
+                            streams = listOf(com.songlinks.app.api.Stream(quality = if (isPreview) "AAC 320kbps" else "stream", url = resolvedUrl)),
                             streamUrl = resolvedUrl,
-                            quality = if (isPreview) "AAC" else song.quality
+                            quality = if (isPreview) "AAC 320kbps" else song.quality
                         )
                         withContext(Dispatchers.Main) {
                             PlayerState.playSong(updatedSong)
@@ -256,7 +259,11 @@ class PlayerService : LifecycleService() {
         } else {
             val reason = if (isPreview) "preview fallback" else "no stream URL"
             Log.d(TAG, "playSong() $reason, resolving via DirectApi for: ${song.title}")
-            PlayerState.playSong(song)
+            if (isPreview) {
+                PlayerState.playSong(song.copy(quality = "Resolving high quality...", streamUrl = "", streams = emptyList()))
+            } else {
+                PlayerState.playSong(song)
+            }
             PlayerState.updateDuration((song.duration ?: 0).toLong())
             PlayerState.setPlaying(false)
             lifecycleScope.launch {
@@ -266,9 +273,9 @@ class PlayerService : LifecycleService() {
                     if (resolvedUrl.isNotBlank()) {
                         val updatedSong = song.copy(
                             source = if (isPreview) "ytmusic" else song.source,
-                            streams = listOf(com.songlinks.app.api.Stream(quality = if (isPreview) "AAC" else "stream", url = resolvedUrl)),
+                            streams = listOf(com.songlinks.app.api.Stream(quality = if (isPreview) "AAC 320kbps" else "stream", url = resolvedUrl)),
                             streamUrl = resolvedUrl,
-                            quality = if (isPreview) "AAC" else song.quality
+                            quality = if (isPreview) "AAC 320kbps" else song.quality
                         )
                         withContext(Dispatchers.Main) {
                             PlayerState.playSong(updatedSong)
