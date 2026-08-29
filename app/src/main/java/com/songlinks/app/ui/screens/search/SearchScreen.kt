@@ -99,7 +99,7 @@ fun SearchScreen(
             .background(Surface)
     ) {
         TopAppBar(
-            title = { Text("Search Songs") },
+            title = { Text("Search", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = TextPrimary) },
             navigationIcon = {
                 if (onBack != null) {
                     IconButton(onClick = onBack) {
@@ -118,7 +118,7 @@ fun SearchScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
-            placeholder = { Text("Search for a song...") },
+            placeholder = { Text("Search songs, artists, albums") },
             leadingIcon = {
                 Icon(Icons.Filled.Search, contentDescription = null)
             },
@@ -129,7 +129,7 @@ fun SearchScreen(
                     }
                 }
             },
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(24.dp),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Accent,

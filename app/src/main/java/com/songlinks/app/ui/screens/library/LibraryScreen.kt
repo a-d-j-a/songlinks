@@ -102,7 +102,7 @@ fun LibraryScreen(
             .background(Surface)
     ) {
         TopAppBar(
-            title = { Text("Library") },
+            title = { Text("Library", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, color = TextPrimary) },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = Surface
             )
