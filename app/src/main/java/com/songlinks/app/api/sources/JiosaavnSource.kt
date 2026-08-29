@@ -40,7 +40,10 @@ object JiosaavnSource {
             } catch (_: Exception) {
                 java.util.Base64.getDecoder().decode(encryptedBase64)
             }
-            String(cipher.doFinal(encryptedBytes), Charsets.UTF_8)
+            val decrypted = String(cipher.doFinal(encryptedBytes), Charsets.UTF_8)
+            // If decryption produces something that doesn't look like a URL,
+            // the API may have sent a plain URL already — return null to trigger fallback
+            return if (decrypted.isNotBlank() && decrypted.startsWith("http")) decrypted else ""
         } catch (e: Exception) {
             Log.e(TAG, "DES decrypt failed", e)
             ""
@@ -127,23 +130,28 @@ object JiosaavnSource {
 
                                 val encryptedUrl = obj.get("encrypted_media_url")?.asString
                                     ?: moreInfo?.get("encrypted_media_url")?.asString ?: ""
-                                var streamUrl = ""
-                                var quality = ""
-                                if (encryptedUrl.isNotBlank()) {
-                                    val decrypted = decryptDesEcb(encryptedUrl)
-                                    if (decrypted.isNotBlank() && decrypted.startsWith("http")) {
-                                        streamUrl = decrypted
-                                        quality = "320kbps"
-                                    }
+                            var streamUrl = ""
+                            var quality = ""
+                            if (encryptedUrl.isNotBlank()) {
+                                // Try DES-ECB decryption first
+                                val decrypted = decryptDesEcb(encryptedUrl)
+                                if (decrypted.isNotBlank() && decrypted.startsWith("http")) {
+                                    streamUrl = decrypted
+                                    quality = "320kbps"
+                                } else if (encryptedUrl.startsWith("http")) {
+                                    // API may have sent plain URL; use directly
+                                    streamUrl = encryptedUrl
+                                    quality = "320kbps"
                                 }
-                                // Fallback to preview vlink (30s preview) for autocomplete results which lack encrypted_media_url
-                                if (streamUrl.isBlank()) {
-                                    val vlink = moreInfo?.get("vlink")?.asString ?: ""
-                                    if (vlink.isNotBlank() && vlink.startsWith("http")) {
-                                        streamUrl = vlink
-                                        quality = "preview"
-                                    }
+                            }
+                            // Fallback to preview vlink (30s preview) for autocomplete results which lack encrypted_media_url
+                            if (streamUrl.isBlank()) {
+                                val vlink = moreInfo?.get("vlink")?.asString ?: ""
+                                if (vlink.isNotBlank() && vlink.startsWith("http")) {
+                                    streamUrl = vlink
+                                    quality = "preview"
                                 }
+                            }
 
                                 songs.add(
                                     SongResult(
@@ -152,7 +160,7 @@ object JiosaavnSource {
                                         title = title,
                                         artist = artist,
                                         album = album,
-                                        duration = duration * 1000,
+                                        duration = duration,
                                         cover = coverUrl,
                                         page = permaUrl,
                                         streams = if (streamUrl.isNotBlank()) listOf(Stream(quality = quality, url = streamUrl)) else emptyList(),
@@ -238,6 +246,10 @@ object JiosaavnSource {
                 if (decrypted.isNotBlank() && decrypted.startsWith("http")) {
                     Log.d(TAG, "getStreamUrl() success for songId=$songId")
                     return@withContext decrypted
+                } else if (encryptedUrl.startsWith("http")) {
+                    // API may have sent plain URL; use directly
+                    Log.d(TAG, "getStreamUrl() using plain URL for songId=$songId")
+                    return@withContext encryptedUrl
                 }
                 Log.w(TAG, "getStreamUrl() decrypted URL invalid: ${decrypted.take(80)}")
             }
@@ -247,6 +259,13 @@ object JiosaavnSource {
             if (vlink.isNotBlank() && vlink.startsWith("http")) {
                 Log.d(TAG, "getStreamUrl() using vlink preview for songId=$songId")
                 return@withContext vlink
+            }
+
+            // Final fallback: if more_info has an encrypted_media_url that we couldn't decrypt,
+            // check if it's already a plain URL
+            if (encryptedUrl.isNotBlank() && encryptedUrl.startsWith("http") && encryptedUrl != json.get("encrypted_media_url")?.asString ?: "") {
+                Log.d(TAG, "getStreamUrl() using plain encrypted_media_url fallback for songId=$songId")
+                return@withContext encryptedUrl
             }
 
             Log.w(TAG, "getStreamUrl() no stream URL for songId=$songId, encryptedUrl=${encryptedUrl.take(20)}")
