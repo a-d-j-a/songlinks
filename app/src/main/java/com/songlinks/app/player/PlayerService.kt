@@ -236,10 +236,12 @@ class PlayerService : LifecycleService() {
         val player = exoPlayer ?: return
         requestAudioFocus()
         try {
+            try { player.stop(); player.clearMediaItems() } catch (_: Exception) {}
             val mediaItem = MediaItem.fromUri(url)
             player.setMediaItem(mediaItem)
             player.prepare()
             player.play()
+            PlayerState.setPlaying(true)
             Log.d(TAG, "play() starting foreground notification")
             startForeground(NOTIFICATION_ID, buildNotification(title, artist))
         } catch (e: Exception) {

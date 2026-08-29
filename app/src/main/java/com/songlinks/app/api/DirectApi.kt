@@ -125,6 +125,18 @@ object DirectApi {
                     Log.d(TAG, "searchYouTubeForStream() resolved: ${url.take(80)}")
                     return url
                 }
+                val piped = getPipedStream(videoId)
+                if (piped.isNotBlank()) {
+                    Log.d(TAG, "searchYouTubeForStream() piped fallback: ${piped.take(80)}")
+                    return piped
+                }
+            }
+            if (results.isNotEmpty()) {
+                val firstVid = results.first().id.removePrefix("ytmusic_")
+                if (firstVid.isNotBlank()) {
+                    val piped = getPipedStream(firstVid)
+                    if (piped.isNotBlank()) return piped
+                }
             }
             Log.w(TAG, "searchYouTubeForStream() no playable stream found for: $query")
             ""
@@ -132,6 +144,37 @@ object DirectApi {
             Log.e(TAG, "searchYouTubeForStream() error", e)
             ""
         }
+    }
+
+    private suspend fun getPipedStream(videoId: String): String = withContext(Dispatchers.IO) {
+        try {
+            val instances = listOf("https://pipedapi.kavin.rocks", "https://pipedapi.drgns.space", "https://api.piped.private.coffee")
+            for (base in instances) {
+                try {
+                    val url = "$base/streams/$videoId"
+                    val req = Request.Builder().url(url).header("User-Agent", "Mozilla/5.0").get().build()
+                    val resp = httpClient.newCall(req).execute()
+                    val body = resp.body?.string() ?: ""; val ok = resp.isSuccessful; resp.close()
+                    if (!ok || body.isBlank()) continue
+                    val json = try { com.google.gson.JsonParser.parseString(body).asJsonObject } catch (_: Exception) { continue }
+                    val audioStreams = json.getAsJsonArray("audioStreams")
+                    if (audioStreams != null && audioStreams.size() > 0) {
+                        var best: String? = null; var bestBr = 0
+                        for (el in audioStreams) {
+                            val o = el.asJsonObject
+                            val u = o.get("url")?.asString ?: continue
+                            val br = o.get("bitrate")?.asInt ?: 0
+                            if (br > bestBr) { bestBr = br; best = u }
+                        }
+                        if (!best.isNullOrBlank()) {
+                            Log.d(TAG, "getPipedStream() success $base $bestBr")
+                            return@withContext best!!
+                        }
+                    }
+                } catch (_: Exception) { continue }
+            }
+            ""
+        } catch (e: Exception) { Log.e(TAG, "getPipedStream error", e); "" }
     }
 
     suspend fun getLyrics(title: String, artist: String): LyricsResponse {

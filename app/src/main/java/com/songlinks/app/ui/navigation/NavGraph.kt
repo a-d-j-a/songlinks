@@ -112,10 +112,11 @@ private fun playSongFromNav(
     } else {
         val reason = if (isPreview) "preview fallback" else "empty url"
         Log.d(TAG, "Stream URL $reason, resolving via DirectApi for id: ${song.id} title=${song.title}")
-        // For preview, don't set preview as current — show resolving state
+        // For preview, don't set preview as current — show resolving state and stop old
         if (isPreview) {
             PlayerState.playSong(song.copy(streamUrl = "", quality = "Resolving high quality..."))
             PlayerState.setPlaying(false)
+            try { playerService?.pause() } catch (_: Exception) {}
         } else {
             PlayerState.playSong(song)
         }
