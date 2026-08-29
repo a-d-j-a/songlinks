@@ -194,6 +194,36 @@ fun HomeScreen(
                 }
             }
         }
+
+        item {
+            Column(modifier = Modifier.padding(top = 24.dp, bottom = 12.dp)) {
+                Text(
+                    text = "Made for you — Echo Mix",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(listOf("Chill Mix" to "https://picsum.photos/200", "Energy Mix" to "https://picsum.photos/201", "Focus Mix" to "https://picsum.photos/202", "Party Mix" to "https://picsum.photos/203")) { (title, _) ->
+                        Card(
+                            modifier = Modifier.width(140.dp).height(140.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = ThemeCard),
+                            border = BorderStroke(1.dp, CardBorder)
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0xFF667eea), Color(0xFF764ba2)))), contentAlignment = Alignment.Center) {
+                                Text(title, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(12.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

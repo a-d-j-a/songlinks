@@ -178,9 +178,18 @@ fun FullPlayerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(top = 12.dp, bottom = 24.dp),
+                .padding(top = 8.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Echo handle + dismiss — always visible
+            Box(
+                modifier = Modifier
+                    .width(40.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color.White.copy(alpha = 0.3f))
+            )
+            Spacer(Modifier.height(8.dp))
             // Top bar — dismiss + playing from
             Row(
                 modifier = Modifier
@@ -188,7 +197,13 @@ fun FullPlayerScreen(
                     .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.08f))
+                ) {
                     Icon(Icons.Default.KeyboardArrowDown, "Close", tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(28.dp))
                 }
                 Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
