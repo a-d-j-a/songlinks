@@ -194,21 +194,26 @@ class PlayerService : LifecycleService() {
         } else {
             val reason = if (isPreview) "preview fallback" else "no stream URL"
             Log.d(TAG, "playSongWithResolve() $reason, resolving via DirectApi for: ${song.title}")
+            // DON'T setPlaying(false) upfront — let the resolution handle it.
+            // If we set it to false here and resolution fails, player stays stopped.
+            // Instead, play with a "Resolving" state so UI shows it's loading.
             if (isPreview) {
                 PlayerState.playSong(song.copy(quality = "Resolving high quality...", streamUrl = "", streams = emptyList()))
+            } else {
+                PlayerState.playSong(song)
             }
-            PlayerState.updateDuration((song.duration ?: 0).toLong())
-            PlayerState.setPlaying(false)
+            // Now resolve via DirectApi in background
             lifecycleScope.launch {
                 try {
                     val api = com.songlinks.app.api.SongApi(applicationContext)
                     val resolvedUrl = api.resolveStreamUrl(song.id, song.title, song.artist)
                     if (resolvedUrl.isNotBlank()) {
+                        val isFallback = song.quality.contains("preview", ignoreCase = true) || song.source.equals("itunes", ignoreCase = true)
                         val updatedSong = song.copy(
-                            source = if (isPreview) "ytmusic" else song.source,
-                            streams = listOf(com.songlinks.app.api.Stream(quality = if (isPreview) "AAC 320kbps" else "stream", url = resolvedUrl)),
+                            source = if (isFallback) "ytmusic" else song.source,
+                            streams = listOf(com.songlinks.app.api.Stream(quality = if (isFallback) "AAC 320kbps" else "stream", url = resolvedUrl)),
                             streamUrl = resolvedUrl,
-                            quality = if (isPreview) "AAC 320kbps" else song.quality
+                            quality = if (isFallback) "AAC 320kbps" else song.quality
                         )
                         withContext(Dispatchers.Main) {
                             PlayerState.playSong(updatedSong)
@@ -216,11 +221,16 @@ class PlayerService : LifecycleService() {
                         }
                     } else {
                         Log.w(TAG, "playSongWithResolve() failed to resolve for: ${song.title}")
-                        withContext(Dispatchers.Main) { PlayerState.setPlaying(false) }
+                        // If resolution failed and this was a preview, show error state
+                        if (isPreview) {
+                            withContext(Dispatchers.Main) { PlayerState.setPlaying(false) }
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "playSongWithResolve() resolve error", e)
-                    withContext(Dispatchers.Main) { PlayerState.setPlaying(false) }
+                    if (isPreview) {
+                        withContext(Dispatchers.Main) { PlayerState.setPlaying(false) }
+                    }
                 }
             }
         }
@@ -261,23 +271,23 @@ class PlayerService : LifecycleService() {
         } else {
             val reason = if (isPreview) "preview fallback" else "no stream URL"
             Log.d(TAG, "playSong() $reason, resolving via DirectApi for: ${song.title}")
+            // Don't setPlaying(false) upfront — let resolution handle it
             if (isPreview) {
                 PlayerState.playSong(song.copy(quality = "Resolving high quality...", streamUrl = "", streams = emptyList()))
             } else {
                 PlayerState.playSong(song)
             }
-            PlayerState.updateDuration((song.duration ?: 0).toLong())
-            PlayerState.setPlaying(false)
             lifecycleScope.launch {
                 try {
                     val api = com.songlinks.app.api.SongApi(applicationContext)
                     val resolvedUrl = api.resolveStreamUrl(song.id, song.title, song.artist)
                     if (resolvedUrl.isNotBlank()) {
+                        val isFallback = song.quality.contains("preview", ignoreCase = true) || song.source.equals("itunes", ignoreCase = true)
                         val updatedSong = song.copy(
-                            source = if (isPreview) "ytmusic" else song.source,
-                            streams = listOf(com.songlinks.app.api.Stream(quality = if (isPreview) "AAC 320kbps" else "stream", url = resolvedUrl)),
+                            source = if (isFallback) "ytmusic" else song.source,
+                            streams = listOf(com.songlinks.app.api.Stream(quality = if (isFallback) "AAC 320kbps" else "stream", url = resolvedUrl)),
                             streamUrl = resolvedUrl,
-                            quality = if (isPreview) "AAC 320kbps" else song.quality
+                            quality = if (isFallback) "AAC 320kbps" else song.quality
                         )
                         withContext(Dispatchers.Main) {
                             PlayerState.playSong(updatedSong)
@@ -285,11 +295,15 @@ class PlayerService : LifecycleService() {
                         }
                     } else {
                         Log.w(TAG, "playSong() failed to resolve stream for: ${song.title}")
-                        withContext(Dispatchers.Main) { PlayerState.setPlaying(false) }
+                        if (isPreview) {
+                            withContext(Dispatchers.Main) { PlayerState.setPlaying(false) }
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "playSong() resolve error", e)
-                    withContext(Dispatchers.Main) { PlayerState.setPlaying(false) }
+                    if (isPreview) {
+                        withContext(Dispatchers.Main) { PlayerState.setPlaying(false) }
+                    }
                 }
             }
         }

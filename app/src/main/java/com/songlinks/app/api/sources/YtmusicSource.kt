@@ -119,7 +119,7 @@ object YtmusicSource {
                 if (coverUrl.isNotBlank() && !coverUrl.startsWith("http")) coverUrl = "https:$coverUrl"
                 // Deduplicate if already added via music item
                 if (songs.any { it.id == "ytmusic_$videoId" }) continue
-                songs.add(SongResult(source="ytmusic", id="ytmusic_$videoId", title=title, artist=artist.ifBlank { "YouTube" }, album="", duration=durationSec*1000, cover=coverUrl, page="$YT_BASE/watch?v=$videoId", streams=emptyList(), quality="AAC", streamUrl=""))
+                songs.add(SongResult(source="ytmusic", id="ytmusic_$videoId", title=title, artist=artist.ifBlank { "YouTube" }, album="", duration=durationSec, cover=coverUrl, page="$YT_BASE/watch?v=$videoId", streams=emptyList(), quality="AAC", streamUrl=""))
             } catch (_: Exception) { continue }
         }
         for (item in allItems) {
@@ -243,7 +243,7 @@ object YtmusicSource {
                     title = title,
                     artist = artist,
                     album = album,
-                    duration = durationSec * 1000,
+                    duration = durationSec,  // already in ms (not seconds * 1000)
                     cover = coverUrl,
                     page = "$YT_BASE/watch?v=$videoId",
                     streams = emptyList(),

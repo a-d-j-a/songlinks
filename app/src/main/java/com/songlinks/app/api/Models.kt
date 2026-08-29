@@ -16,7 +16,7 @@ data class SongResult(
     val title: String,
     val artist: String,
     val album: String? = null,
-    val duration: Int? = null,
+    val duration: Int? = null,  // stored in ms directly (not seconds * 1000)
     val cover: String? = null,
     val page: String? = null,
     val streams: List<Stream> = emptyList(),
@@ -31,7 +31,7 @@ data class SongResult(
 ) {
     val coverUrl: String get() = cover ?: ""
     val pageUrl: String get() = page ?: ""
-    val durationMs: Long get() = (duration ?: 0).toLong() * 1000L
+    val durationMs: Long get() = duration?.toLong() ?: 0L  // duration already in ms
 }
 
 data class Stream(
