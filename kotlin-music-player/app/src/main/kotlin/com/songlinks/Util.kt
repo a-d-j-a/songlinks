@@ -233,16 +233,28 @@ object Util {
         }.execute { it }
     }
 
-    suspend fun postJson(url: String, jsonBody: String, timeoutMs: Long = 6000L): JsonElement {
+    // Dedicated client for raw POST (no ContentNegotiation interference)
+    private val rawClient = HttpClient(CIO) {
+        install(HttpTimeout) {
+            requestTimeoutMillis = 15_000
+            connectTimeoutMillis = 10_000
+            socketTimeoutMillis = 15_000
+        }
+        followRedirects = true
+        expectSuccess = false
+    }
+
+    suspend fun postJson(url: String, jsonBody: String, timeoutMs: Long = 10_000L): JsonElement {
         return withTimeout(timeoutMs) {
-            val response = httpClient.post(url) {
-                contentType(ContentType.Application.Json)
+            val response = rawClient.post(url) {
                 setBody(TextContent(jsonBody, ContentType.Application.Json))
                 header("User-Agent", UA)
                 header("Accept", "application/json")
             }
+            val status = response.status
             val text = response.bodyAsText()
-            if (text.isBlank()) throw FetchException("Empty response from $url")
+            if (text.isBlank()) throw FetchException("Empty response ($status) from $url")
+            if (!status.isSuccess()) throw FetchException("HTTP $status from $url: ${text.take(300)}")
             json.parseToJsonElement(text)
         }
     }

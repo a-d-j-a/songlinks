@@ -652,15 +652,20 @@ object YtMusicSource : MusicSource {
     suspend fun stream(videoId: String): List<StreamInfo> {
         val vid = validateVideoId(videoId)
 
-        // Try ANDROID first (20.10.38 returns direct URLs), fall back to WEB
-        return try {
-            streamWithClient("ANDROID", ANDROID_CLIENT_VERSION, vid, ANDROID_SDK_VERSION)
-        } catch (e: Exception) {
+        // Try ANDROID 20.10.38 first (direct URLs), then IOS, then WEB
+        val clients = listOf(
+            "ANDROID" to Triple(ANDROID_CLIENT_VERSION, ANDROID_SDK_VERSION, "android"),
+            "IOS" to Triple("20.10.38", "", "ios"),
+            "WEB" to Triple(WEB_CLIENT_VERSION, "", "web")
+        )
+        var lastError: Exception? = null
+        for ((name, triple) in clients) {
             try {
-                streamWithClient("WEB", WEB_CLIENT_VERSION, vid, "")
-            } catch (_: Exception) {
-                throw FetchException("ytmusic stream: both ANDROID and WEB failed for $vid: ${e.message}", e)
+                return streamWithClient(name, triple.first, vid, triple.second)
+            } catch (e: Exception) {
+                lastError = e
             }
         }
+        throw FetchException("ytmusic stream: all clients failed for $vid: ${lastError?.message}")
     }
 }
