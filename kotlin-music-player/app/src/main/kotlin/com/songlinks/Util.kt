@@ -7,6 +7,7 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.http.content.TextContent
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -230,6 +231,20 @@ object Util {
                 header("User-Agent", UA)
             }
         }.execute { it }
+    }
+
+    suspend fun postJson(url: String, jsonBody: String, timeoutMs: Long = 6000L): JsonElement {
+        return withTimeout(timeoutMs) {
+            val response = httpClient.post(url) {
+                contentType(ContentType.Application.Json)
+                setBody(TextContent(jsonBody, ContentType.Application.Json))
+                header("User-Agent", UA)
+                header("Accept", "application/json")
+            }
+            val text = response.bodyAsText()
+            if (text.isBlank()) throw FetchException("Empty response from $url")
+            json.parseToJsonElement(text)
+        }
     }
 }
 

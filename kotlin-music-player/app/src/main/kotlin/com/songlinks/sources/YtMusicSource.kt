@@ -5,9 +5,6 @@ import com.songlinks.MusicSource
 import com.songlinks.SongResult
 import com.songlinks.StreamInfo
 import com.songlinks.Util
-import io.ktor.http.ContentType
-import io.ktor.http.HttpMethod
-import io.ktor.http.content.TextContent
 import kotlinx.serialization.json.*
 
 object YtMusicSource : MusicSource {
@@ -540,13 +537,8 @@ object YtMusicSource : MusicSource {
             put("query", normalizedQ)
         }
 
-        val res: JsonElement = try {
-            Util.fetchJson(
-                url = "$INNERTUBE_SEARCH?key=$API_KEY&prettyPrint=false",
-                timeoutMs = TIMEOUT_MS,
-                method = HttpMethod.Post,
-                body = TextContent(body.toString(), ContentType.Application.Json)
-            )
+        val res = try {
+            Util.postJson("$INNERTUBE_SEARCH?key=$API_KEY&prettyPrint=false", body.toString(), TIMEOUT_MS)
         } catch (e: Exception) {
             throw FetchException("ytmusic search failed for \"${normalizedQ.take(50)}\": ${e.message}", e)
         }
@@ -571,15 +563,13 @@ object YtMusicSource : MusicSource {
         return valid
     }
 
-    suspend fun stream(videoId: String): List<StreamInfo> {
-        val vid = validateVideoId(videoId)
-
+    private suspend fun streamWithClient(clientName: String, clientVersion: String, vid: String, sdkVersion: String = "30"): List<StreamInfo> {
         val body = buildJsonObject {
             putJsonObject("context") {
                 putJsonObject("client") {
-                    put("clientName", "ANDROID")
-                    put("clientVersion", ANDROID_CLIENT_VERSION)
-                    put("androidSdkVersion", ANDROID_SDK_VERSION)
+                    put("clientName", clientName)
+                    put("clientVersion", clientVersion)
+                    if (sdkVersion.isNotEmpty()) put("androidSdkVersion", sdkVersion)
                     put("hl", "en")
                     put("gl", "US")
                 }
@@ -589,17 +579,7 @@ object YtMusicSource : MusicSource {
             put("contentCheckOk", true)
         }
 
-        val res: JsonElement = try {
-            Util.fetchJson(
-                url = "$INNERTUBE_PLAYER?key=$API_KEY",
-                timeoutMs = TIMEOUT_MS,
-                method = HttpMethod.Post,
-                body = TextContent(body.toString(), ContentType.Application.Json)
-            )
-        } catch (e: Exception) {
-            throw FetchException("ytmusic stream failed for \"${vid.take(30)}\": ${e.message}", e)
-        }
-
+        val res = Util.postJson("$INNERTUBE_PLAYER?key=$API_KEY", body.toString(), TIMEOUT_MS)
         val obj = res.jsonObject
 
         val playStatus = obj["playabilityStatus"]?.obj()
@@ -611,23 +591,23 @@ object YtMusicSource : MusicSource {
             val errorStatuses = setOf("ERROR", "LOGIN_REQUIRED", "UNPLAYABLE", "AGE_VERIFICATION_REQUIRED")
             if (status in errorStatuses) {
                 val msg = if (reason.isNotEmpty()) "$status: $reason" else "Video ${status.lowercase()} ($vid)"
-                throw FetchException("ytmusic stream: $msg")
+                throw FetchException("ytmusic stream ($clientName): $msg")
             }
         }
 
         val streamingData = obj["streamingData"]?.obj()
-            ?: throw FetchException("ytmusic stream: no playable formats for $vid: ${playStatus?.get("reason")?.str() ?: "no streamingData"}")
+            ?: throw FetchException("ytmusic stream ($clientName): no streamingData for $vid")
 
         val rawFormats = mutableListOf<JsonObject>()
         streamingData["adaptiveFormats"]?.arr()?.forEach { it.obj()?.let { o -> rawFormats.add(o) } }
         streamingData["formats"]?.arr()?.forEach { it.obj()?.let { o -> rawFormats.add(o) } }
-        if (rawFormats.isEmpty()) throw FetchException("ytmusic stream: empty formats for $vid")
+        if (rawFormats.isEmpty()) throw FetchException("ytmusic stream ($clientName): empty formats for $vid")
 
         val audioOnly = rawFormats.filter { f ->
             val mt = f["mimeType"]?.str() ?: ""
             mt.contains("audio", ignoreCase = true)
         }
-        if (audioOnly.isEmpty()) throw FetchException("ytmusic stream: no audio formats for $vid")
+        if (audioOnly.isEmpty()) throw FetchException("ytmusic stream ($clientName): no audio formats for $vid")
 
         data class MappedFormat(val quality: String, val url: String, val type: String, val bitrate: Int, val contentLength: Long?)
 
@@ -656,8 +636,8 @@ object YtMusicSource : MusicSource {
         }
 
         if (mapped.isEmpty()) {
-            if (cipherCount > 0) throw FetchException("ytmusic stream: all $cipherCount audio formats require signature deciphering (signatureCipher) for $vid — no direct URLs available")
-            throw FetchException("ytmusic stream: no playable audio URLs for $vid")
+            if (cipherCount > 0) throw FetchException("ytmusic stream ($clientName): all $cipherCount audio formats require signature deciphering for $vid")
+            throw FetchException("ytmusic stream ($clientName): no playable audio URLs for $vid")
         }
 
         mapped.sortWith(
@@ -667,5 +647,20 @@ object YtMusicSource : MusicSource {
         )
 
         return mapped.map { StreamInfo(quality = it.quality, url = it.url, type = it.type) }
+    }
+
+    suspend fun stream(videoId: String): List<StreamInfo> {
+        val vid = validateVideoId(videoId)
+
+        // Try ANDROID first (20.10.38 returns direct URLs), fall back to WEB
+        return try {
+            streamWithClient("ANDROID", ANDROID_CLIENT_VERSION, vid, ANDROID_SDK_VERSION)
+        } catch (e: Exception) {
+            try {
+                streamWithClient("WEB", WEB_CLIENT_VERSION, vid, "")
+            } catch (_: Exception) {
+                throw FetchException("ytmusic stream: both ANDROID and WEB failed for $vid: ${e.message}", e)
+            }
+        }
     }
 }
