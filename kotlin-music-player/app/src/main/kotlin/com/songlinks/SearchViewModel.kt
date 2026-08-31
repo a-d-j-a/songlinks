@@ -38,12 +38,16 @@ class SearchViewModel : ViewModel() {
                 async {
                     val s = System.currentTimeMillis()
                     try {
-                        val data = withTimeoutOrNull(4000) {
+                        val data = withTimeoutOrNull(10000) {
                             adapters[name]!!.search(q, limit)
-                        } ?: emptyList()
-                        PerSource(name, true, data.size, System.currentTimeMillis() - s) to data
+                        }
+                        if (data == null) {
+                            PerSource(name, false, 0, System.currentTimeMillis() - s, "timeout 10s") to emptyList<SongResult>()
+                        } else {
+                            PerSource(name, true, data.size, System.currentTimeMillis() - s) to data
+                        }
                     } catch (e: Exception) {
-                        PerSource(name, false, 0, System.currentTimeMillis() - s, e.message) to
+                        PerSource(name, false, 0, System.currentTimeMillis() - s, e.message?.take(120)) to
                                 emptyList<SongResult>()
                     }
                 }

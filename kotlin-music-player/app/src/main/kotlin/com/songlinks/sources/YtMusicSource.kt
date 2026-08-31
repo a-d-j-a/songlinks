@@ -43,13 +43,20 @@ object YtMusicSource : MusicSource {
         }
     }
 
+    private fun jsonEscape(s: String): String = s
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+
     // ── SEARCH ────────────────────────────────────────────────────────
 
     override suspend fun search(q: String, limit: Int): List<SongResult> = withContext(Dispatchers.IO) {
         val nq = q.trim().takeIf { it.isNotEmpty() } ?: return@withContext emptyList()
         val nLimit = limit.coerceIn(1, 50)
 
-        val body = """{"context":{"client":{"clientName":"WEB_REMIX","clientVersion":"$WEB_VERSION","hl":"en","gl":"US"}},"query":"${nq.replace("\"", "\\\"")}"}"""
+        val body = """{"context":{"client":{"clientName":"WEB_REMIX","clientVersion":"$WEB_VERSION","hl":"en","gl":"US"}},"query":"${jsonEscape(nq)}"}"""
         val raw = try {
             post("$SEARCH_URL&prettyPrint=false", body)
         } catch (e: Exception) {
