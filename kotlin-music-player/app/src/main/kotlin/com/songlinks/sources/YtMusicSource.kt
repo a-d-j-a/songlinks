@@ -4,13 +4,11 @@ import com.songlinks.FetchException
 import com.songlinks.MusicSource
 import com.songlinks.SongResult
 import com.songlinks.StreamInfo
-import com.songlinks.Util
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
-import java.net.URI
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
+import java.net.HttpURLConnection
+import java.net.URL
 
 object YtMusicSource : MusicSource {
     override val name = "ytmusic"
@@ -23,18 +21,26 @@ object YtMusicSource : MusicSource {
     private const val SDK_VERSION = "34"
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
-    private val javaClient = java.net.http.HttpClient.newHttpClient()
 
     private fun post(url: String, body: String, ua: String = "Mozilla/5.0"): String {
-        val req = HttpRequest.newBuilder(URI.create(url))
-            .header("Content-Type", "application/json")
-            .header("User-Agent", ua)
-            .header("Accept", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(body))
-            .build()
-        val resp = javaClient.send(req, HttpResponse.BodyHandlers.ofString())
-        if (resp.statusCode() != 200) throw FetchException("HTTP ${resp.statusCode()} from $url: ${resp.body().take(300)}")
-        return resp.body()
+        val conn = URL(url).openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("User-Agent", ua)
+            conn.setRequestProperty("Accept", "application/json")
+            conn.doOutput = true
+            conn.connectTimeout = 10000
+            conn.readTimeout = 10000
+            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val text = stream.bufferedReader(Charsets.UTF_8).readText()
+            if (code != 200) throw FetchException("HTTP $code from $url: ${text.take(300)}")
+            return text
+        } finally {
+            conn.disconnect()
+        }
     }
 
     // ── SEARCH ────────────────────────────────────────────────────────
@@ -58,16 +64,12 @@ object YtMusicSource : MusicSource {
 
     private fun extractSearchItems(el: JsonElement, out: MutableList<SongResult>) {
         if (el !is JsonObject) return
-
-        // Direct musicResponsiveListItemRenderer
         val renderer = el["musicResponsiveListItemRenderer"]?.jsonObject
         if (renderer != null) {
             val item = parseSearchItem(renderer)
             if (item != null) out.add(item)
             return
         }
-
-        // Recurse into arrays and objects
         for (v in el.values) {
             when (v) {
                 is JsonArray -> v.forEach { extractSearchItems(it, out) }
@@ -77,7 +79,6 @@ object YtMusicSource : MusicSource {
     }
 
     private fun parseSearchItem(r: JsonObject): SongResult? {
-        // videoId from overlay or playlistItemData
         val vid = r["overlay"]?.jsonObject
             ?.get("musicItemThumbnailOverlayRenderer")?.jsonObject
             ?.get("content")?.jsonObject
@@ -87,42 +88,26 @@ object YtMusicSource : MusicSource {
             ?.get("videoId")?.jsonPrimitive?.content
             ?: r["playlistItemData"]?.jsonObject?.get("videoId")?.jsonPrimitive?.content
             ?: return null
-
         if (vid.length !in 5..100 || vid.contains(Regex("\\s"))) return null
-
-        // flexColumns
         val flex = r["flexColumns"]?.jsonArray ?: return null
-
-        // Title from col[0]
         val titleRuns = flex.getOrNull(0)?.jsonObject
             ?.get("musicResponsiveListItemFlexColumnRenderer")?.jsonObject
             ?.get("text")?.jsonObject?.get("runs")?.jsonArray
         val title = titleRuns?.joinToString("") { it.jsonObject["text"]?.jsonPrimitive?.content ?: "" }?.trim()?.ifEmpty { null }
-
-        // Artist from col[1] — split by " • ", take first non-metadata part
         val subRuns = flex.getOrNull(1)?.jsonObject
             ?.get("musicResponsiveListItemFlexColumnRenderer")?.jsonObject
             ?.get("text")?.jsonObject?.get("runs")?.jsonArray
         val subText = subRuns?.joinToString("") { it.jsonObject["text"]?.jsonPrimitive?.content ?: "" } ?: ""
         val artist = parseArtistFromSubtitle(subText)
-
-        // Duration from col[1] — last part after " • " that matches M:SS
         val duration = parseDurationFromSubtitle(subText)
-
-        // Thumbnail
         val thumbs = r["thumbnail"]?.jsonObject
             ?.get("musicThumbnailRenderer")?.jsonObject
             ?.get("thumbnail")?.jsonObject
             ?.get("thumbnails")?.jsonArray
         val cover = thumbs?.lastOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
-
         return SongResult(
-            source = "ytmusic",
-            id = vid,
-            title = title,
-            artist = artist,
-            duration = duration,
-            cover = cover,
+            source = "ytmusic", id = vid, title = title, artist = artist,
+            duration = duration, cover = cover,
             page = "https://music.youtube.com/watch?v=$vid"
         )
     }
@@ -164,13 +149,10 @@ object YtMusicSource : MusicSource {
     suspend fun stream(videoId: String): List<StreamInfo> = withContext(Dispatchers.IO) {
         val vid = videoId.removePrefix("yt:").trim()
         require(vid.length in 5..100 && Regex("^[a-zA-Z0-9_-]+$").matches(vid)) { "Invalid id: $vid" }
-
-        // Try ANDROID first, then IOS
         val clients = listOf(
             Triple("ANDROID", ANDROID_VERSION, "com.google.android.youtube/$ANDROID_VERSION (Linux; U; Android 14)"),
             Triple("IOS", IOS_VERSION, "com.google.ios.youtube/$IOS_VERSION (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X)")
         )
-
         var lastError: String? = null
         for ((clientName, clientVersion, ua) in clients) {
             try {
@@ -178,30 +160,24 @@ object YtMusicSource : MusicSource {
                 val body = """{"context":{"client":{"clientName":"$clientName","clientVersion":"$clientVersion"$sdk,"hl":"en","gl":"US"}},"videoId":"$vid","racyCheckOk":true,"contentCheckOk":true}"""
                 val raw = post(PLAYER_URL, body, ua)
                 val root = json.parseToJsonElement(raw).jsonObject
-
-                // Check playability
                 val status = root["playabilityStatus"]?.jsonObject?.get("status")?.jsonPrimitive?.content
                 if (status != "OK") {
                     val reason = root["playabilityStatus"]?.jsonObject?.get("reason")?.jsonPrimitive?.content ?: status
                     lastError = "$clientName: $status - $reason"
                     continue
                 }
-
                 val sd = root["streamingData"]?.jsonObject ?: run {
                     lastError = "$clientName: no streamingData"
                     continue
                 }
-
                 val adaptive = sd["adaptiveFormats"]?.jsonArray ?: JsonArray.Empty
                 val formats = sd["formats"]?.jsonArray ?: JsonArray.Empty
                 val allFormats = mutableListOf<JsonObject>()
                 formats.forEach { it.jsonObject?.let { o -> allFormats.add(o) } }
                 adaptive.forEach { it.jsonObject?.let { o -> allFormats.add(o) } }
-
                 val audios = allFormats.filter { f ->
                     f["mimeType"]?.jsonPrimitive?.content?.contains("audio", true) == true
                 }
-
                 val mapped = audios.mapNotNull { f ->
                     val url = f["url"]?.jsonPrimitive?.content ?: return@mapNotNull null
                     if (!url.startsWith("http")) return@mapNotNull null
@@ -214,14 +190,12 @@ object YtMusicSource : MusicSource {
                     compareByDescending<StreamInfo> { if (it.type.contains("mp4")) 1 else 0 }
                         .thenByDescending { it.quality.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
                 )
-
                 if (mapped.isNotEmpty()) return@withContext mapped
                 lastError = "$clientName: no playable audio URLs"
             } catch (e: Exception) {
                 lastError = "$clientName: ${e.message}"
             }
         }
-
         throw FetchException("ytmusic stream: all clients failed for $vid: $lastError")
     }
 }
