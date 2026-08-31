@@ -1,16 +1,30 @@
 package com.songlinks.sources
 
-import com.songlinks.Models.*
+import com.songlinks.Extra
+import com.songlinks.SongResult
+import com.songlinks.StreamInfo
 import com.songlinks.Util
-import io.ktor.client.call.*
-import io.ktor.client.request.*
 import kotlinx.serialization.Serializable
 
-// Port of src/sources/itunes.js
 object ItunesSource : com.songlinks.MusicSource {
     override val name = "itunes"
-    @Serializable private data class ItunesRes(val resultCount: Int = 0, val results: List<ItunesTrack> = emptyList())
-    @Serializable private data class ItunesTrack(
+
+    private const val ITUNES_BASE = "https://itunes.apple.com/search"
+    private const val DEFAULT_LIMIT = 10
+    private const val MIN_LIMIT = 1
+    private const val MAX_LIMIT = 50
+    private const val MAX_QUERY_LEN = 300
+    private const val ARTWORK_SMALL = "100x100"
+    private const val ARTWORK_LARGE = "600x600"
+
+    @Serializable
+    private data class ItunesRes(
+        val resultCount: Int = 0,
+        val results: List<ItunesTrack> = emptyList()
+    )
+
+    @Serializable
+    private data class ItunesTrack(
         val trackId: Long? = null,
         val trackName: String? = null,
         val artistName: String? = null,
@@ -25,29 +39,115 @@ object ItunesSource : com.songlinks.MusicSource {
         val collectionViewUrl: String? = null,
         val previewUrl: String? = null,
         val trackExplicitness: String? = null,
-        val explicitness: String? = null
+        val explicitness: String? = null,
+        val collectionExplicitness: String? = null
     )
 
+    // -- helpers --
+
+    private fun normalizeQuery(q: String): String? {
+        val trimmed = q.trim()
+        if (trimmed.isEmpty()) return null
+        return if (trimmed.length > MAX_QUERY_LEN) trimmed.substring(0, MAX_QUERY_LEN) else trimmed
+    }
+
+    private fun normalizeLimit(raw: Int): Int {
+        val n = raw.coerceIn(MIN_LIMIT, MAX_LIMIT)
+        return if (n < MIN_LIMIT) MIN_LIMIT else if (n > MAX_LIMIT) MAX_LIMIT else n
+    }
+
+    private fun upgradeArtwork(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+        val trimmed = url.trim()
+        if (trimmed.isEmpty()) return null
+        return trimmed.replace(ARTWORK_SMALL, ARTWORK_LARGE)
+    }
+
+    private fun resolveArtwork(r: ItunesTrack): String? {
+        val candidate = listOf(r.artworkUrl100, r.artworkUrl60, r.artworkUrl30)
+            .firstOrNull { !it.isNullOrBlank() && it.trim().isNotEmpty() }
+            ?: return null
+        return upgradeArtwork(candidate) ?: candidate.trim()
+    }
+
+    private fun parseDuration(trackTimeMillis: Long?): Int? {
+        if (trackTimeMillis == null) return null
+        val num = trackTimeMillis.toDouble()
+        if (!num.isFinite() || num <= 0) return null
+        val secs = Math.round(num / 1000.0).toInt()
+        return if (secs > 0) secs else null
+    }
+
+    private fun parseStringField(val_: String?): String? {
+        if (val_ == null) return null
+        return val_.trim().ifEmpty { null }
+    }
+
+    private fun isExplicit(r: ItunesTrack): Boolean {
+        val v = r.trackExplicitness ?: r.explicitness ?: r.collectionExplicitness ?: return false
+        return v.trim().equals("explicit", ignoreCase = true)
+    }
+
+    private fun buildStreams(r: ItunesTrack): List<StreamInfo> {
+        val url = r.previewUrl?.trim() ?: return emptyList()
+        if (url.isEmpty()) return emptyList()
+        if (!url.startsWith("http", ignoreCase = true)) return emptyList()
+        return listOf(StreamInfo(quality = "preview", url = url, type = "audio"))
+    }
+
+    private fun mapResult(r: ItunesTrack): SongResult? {
+        val rawId = r.trackId ?: return null
+        val idStr = rawId.toString().trim()
+        if (idStr.isEmpty() || idStr.equals("null", ignoreCase = true) ||
+            idStr.equals("undefined", ignoreCase = true) || idStr.equals("nan", ignoreCase = true)
+        ) return null
+
+        return SongResult(
+            source = "itunes",
+            id = idStr,
+            title = parseStringField(r.trackName),
+            artist = parseStringField(r.artistName),
+            album = parseStringField(r.collectionName),
+            duration = parseDuration(r.trackTimeMillis),
+            cover = resolveArtwork(r),
+            page = parseStringField(r.trackViewUrl) ?: parseStringField(r.collectionViewUrl),
+            streams = buildStreams(r),
+            genre = parseStringField(r.primaryGenreName),
+            release = parseStringField(r.releaseDate),
+            extra = Extra(isExplicit = isExplicit(r))
+        )
+    }
+
     override suspend fun search(q: String, limit: Int): List<SongResult> {
-        val nq = q.trim().takeIf { it.isNotEmpty() } ?: return emptyList()
-        val nLimit = limit.coerceIn(1, 50)
-        val url = "https://itunes.apple.com/search?term=${encode(nq)}&media=music&entity=song&limit=$nLimit"
-        val res: ItunesRes = Util.client.get(url).body()
-        return res.results.mapNotNull { r ->
-            val id = r.trackId?.toString()?.takeIf { it.isNotBlank() && it != "null" } ?: return@mapNotNull null
-            val cover = (r.artworkUrl100 ?: r.artworkUrl60 ?: r.artworkUrl30)?.replace("100x100", "600x600")
-            val duration = r.trackTimeMillis?.let { (it / 1000).toInt().takeIf { v -> v > 0 } }
-            val isExplicit = (r.trackExplicitness ?: r.explicitness)?.equals("explicit", true) == true
-            val stream = r.previewUrl?.takeIf { it.startsWith("http") }?.let { listOf(StreamInfo("preview", it, "audio")) } ?: emptyList()
-            SongResult(
-                source = "itunes", id = id, title = r.trackName, artist = r.artistName,
-                album = r.collectionName, duration = duration, release = r.releaseDate,
-                genre = r.primaryGenreName, cover = cover, page = r.trackViewUrl ?: r.collectionViewUrl,
-                streams = stream, extra = Extra(isExplicit = isExplicit)
+        val normalizedQ = normalizeQuery(q) ?: return emptyList()
+        val normalizedLimit = normalizeLimit(limit)
+
+        val encoded = java.net.URLEncoder.encode(normalizedQ, "UTF-8")
+        val url = "$ITUNES_BASE?term=$encoded&media=music&entity=song&limit=$normalizedLimit"
+
+        val json = try {
+            Util.fetchJson<ItunesRes>(url, timeoutMs = Util.DEFAULT_TIMEOUT_MS)
+        } catch (e: Exception) {
+            val msg = e.message ?: e.toString()
+            throw IllegalStateException(
+                "itunes search failed for \"${normalizedQ.take(50)}\": $msg", e
             )
         }
+
+        if (json == null) return emptyList()
+
+        val resultsArray = json.results
+        if (resultsArray.isEmpty()) return emptyList()
+
+        val mapped = mutableListOf<SongResult>()
+        for (r in resultsArray) {
+            try {
+                val m = mapResult(r)
+                if (m != null) mapped.add(m)
+            } catch (_: Exception) {
+                continue
+            }
+        }
+        return mapped
     }
-    private fun encode(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
-    private fun String.replace(old: String, new: String) = this.replace(old, new)
 }
-private val SongResult.release: String? get() = null // placeholder for serialization, actual field is in data class copy

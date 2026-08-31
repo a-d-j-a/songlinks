@@ -12,13 +12,15 @@ data class SongResult(
     val title: String? = null,
     val artist: String? = null,
     val album: String? = null,
-    val duration: Int? = null, // seconds
+    val duration: Int? = null,
     val cover: String? = null,
     val page: String? = null,
     val streams: List<StreamInfo> = emptyList(),
     val genre: String? = null,
     val language: String? = null,
     val playCount: Int? = null,
+    val release: String? = null,
+    val sources: List<String>? = null,
     val extra: Extra? = null
 )
 
