@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SongLinks — Every song. Every source.</title>
+<meta name="description" content="SongLinks API — aggregated music search across iTunes, JioSaavn & YouTube Music. Preview, stream, discover.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config={
+  darkMode:'class',
+  theme:{
+    extend:{
+      fontFamily:{ outfit:['Outfit','system-ui','sans-serif'], mono:['JetBrains Mono','monospace'], inter:['Inter','sans-serif']},
+      colors:{ ink:'#070A14', pane:'#0F1323' },
+      animation:{ 'float':'float 8s ease-in-out infinite', 'pulse-glow':'pulseGlow 2.2s ease-in-out infinite', 'shimmer':'shimmer 1.6s linear infinite', 'in':'in 0.45s cubic-bezier(.16,1,.3,1)' },
+      keyframes:{
+        float:{ '0%,100%':{transform:'translateY(0) translateX(0)'}, '50%':{transform:'translateY(-18px) translateX(8px)'}},
+        pulseGlow:{ '0%,100%':{opacity:0.6, transform:'scale(1)'}, '50%':{opacity:1, transform:'scale(1.08)'}},
+        shimmer:{ '0%':{backgroundPosition:'-400px 0'}, '100%':{backgroundPosition:'400px 0'}},
+        in:{ '0%':{opacity:0, transform:'translateY(10px) scale(.98)'}, '100%':{opacity:1, transform:'translateY(0) scale(1)'}},
+      }
+    }
+  }
+}
+</script>
+<style>
+*{scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.18) transparent}
+*::-webkit-scrollbar{height:6px;width:6px}
+*::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:999px}
+*::-webkit-scrollbar-track{background:transparent}
+body{background:#070A14;color:#fff;font-family:'Inter',system-ui,sans-serif;overflow-x:hidden}
+.glass{background:rgba(255,255,255,0.06);backdrop-filter:blur(16px) saturate(1.25);-webkit-backdrop-filter:blur(16px) saturate(1.25);border:1px solid rgba(255,255,255,0.08)}
+.glass-strong{background:rgba(18,22,42,0.78);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);border:1px solid rgba(255,255,255,0.10)}
+.card-hover{transition:all .28s cubic-bezier(.16,1,.3,1)}
+.card-hover:hover{transform:translateY(-6px) scale(1.01);border-color:rgba(255,255,255,0.16);box-shadow:0 20px 50px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.06) inset}
+.shimmer-bg{background:linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.09) 37%, rgba(255,255,255,.04) 63%);background-size:400% 100%;animation:shimmer 1.5s infinite}
+.range{ -webkit-appearance:none; appearance:none; height:6px; border-radius:999px; background:rgba(255,255,255,.12); outline:none}
+.range::-webkit-slider-thumb{ -webkit-appearance:none; width:18px; height:18px; border-radius:50%; background:linear-gradient(135deg,#a78bfa,#f472b6); border:2px solid white; cursor:pointer; box-shadow:0 2px 10px rgba(167,139,250,.5); transition:.15s}
+.range::-webkit-slider-thumb:hover{ transform:scale(1.15)}
+.range::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#a78bfa,#f472b6);border:2px solid white;cursor:pointer}
+.focus-ring:focus{outline:none;box-shadow:0 0 0 2px rgba(167,139,250,.35)}
+::selection{background:rgba(167,139,250,.35)}
+</style>
+</head>
+<body class="min-h-screen relative selection:bg-violet-500/30">
+<!-- Ambient Orbs -->
+<div class="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+  <div class="absolute -top-28 -right-28 w-[640px] h-[640px] rounded-full blur-[120px] opacity-[0.55]" style="background: radial-gradient(closest-side, rgba(139,92,246,.35), transparent 70%)"></div>
+  <div class="absolute top-[18%] -left-32 w-[720px] h-[720px] rounded-full blur-[130px] opacity-[0.45]" style="background: radial-gradient(closest-side, rgba(236,72,153,.28), transparent 70%)"></div>
+  <div class="absolute -bottom-40 left-[35%] w-[900px] h-[560px] rounded-full blur-[140px] opacity-[0.35]" style="background: radial-gradient(closest-side, rgba(6,182,212,.22), transparent 70%)"></div>
+  <div class="absolute inset-0 opacity-[0.035]" style="background-image:radial-gradient(rgba(255,255,255,.55) 1px, transparent 1px);background-size:22px 22px"></div>
+  <div class="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#070A14]"></div>
+</div>
+
+<!-- Header -->
+<header class="sticky top-0 z-40 backdrop-blur-xl bg-[#070A14]/55 border-b border-white/[0.06]">
+  <div class="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 h-[64px] flex items-center justify-between gap-4">
+    <div class="flex items-center gap-4 min-w-0">
+      <div class="flex items-center gap-3">
+        <div class="h-9 w-9 rounded-xl grid place-items-center font-outfit font-800 text-[15px] text-white shadow-lg" style="background: linear-gradient(135deg,#8b5cf6 0%,#ec4899 55%,#06b6d4 100%); box-shadow:0 8px 22px rgba(139,92,246,.35), inset 0 1px 0 rgba(255,255,255,.25)">
+          <span class="drop-shadow">♪</span>
+        </div>
+        <div class="leading-none">
+          <div class="font-outfit font-700 tracking-tight text-[18px] flex items-center gap-2">SongLinks <span class="hidden sm:inline-flex items-center rounded-full bg-white/[0.08] border border-white/10 px-2 py-0.5 text-[10px] tracking-widest font-600 text-white/80">API</span></div>
+          <div class="text-[11px] tracking-widest font-500 text-white/50 uppercase -mt-0.5">iTunes • JioSaavn • YT Music</div>
+        </div>
+      </div>
+      <div class="hidden lg:flex items-center gap-2 ml-2 pl-3 border-l border-white/10">
+        <span class="text-[11px] font-600 tracking-widest text-white/40 uppercase">Endpoints</span>
+        <code class="text-[11px] font-mono px-2 py-1 rounded-full bg-white/5 border border-white/10 text-white/70">/search</code>
+        <code class="text-[11px] font-mono px-2 py-1 rounded-full bg-white/5 border border-white/10 text-white/70">/stream</code>
+        <code class="text-[11px] font-mono px-2 py-1 rounded-full bg-white/5 border border-white/10 text-white/70">/health</code>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 sm:gap-3">
+      <!-- Health -->
+      <div id="healthPill" class="hidden sm:flex items-center gap-2 rounded-full px-3 py-1.5 glass text-xs font-500">
+        <span id="healthDot" class="h-2.5 w-2.5 rounded-full bg-zinc-500 shadow-[0_0_0_4px_rgba(255,255,255,0.08)] animate-pulse-glow"></span>
+        <span id="healthText" class="font-mono text-[12px] text-white/70">checking…</span>
+        <span id="healthUptime" class="hidden md:inline text-white/40">• —</span>
+      </div>
+      <button id="shortcutsBtn" class="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-white text-ink px-3 py-1.5 text-xs font-700 hover:bg-white/90 transition">⌘ K <span class="hidden lg:inline text-ink/60 font-500">shortcuts</span></button>
+      <a href="/health" target="_blank" class="hidden sm:inline-flex h-8 w-8 grid place-items-center rounded-full glass hover:bg-white/10 transition" title="Open /health">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main class="relative max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 pb-28">
+  <!-- Hero -->
+  <div class="pt-8 sm:pt-10 lg:pt-12 pb-6">
+    <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+      <div class="min-w-0">
+        <div class="inline-flex items-center gap-2 rounded-full px-3 py-1.5 glass text-[11px] font-700 tracking-widest uppercase text-white/70">
+          <span class="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,.7)]"></span>
+          Live aggregation • 3 sources • sub-4s timeout
+        </div>
+        <h1 class="font-outfit font-800 leading-[0.9] tracking-tight mt-4 text-[34px] sm:text-[42px] lg:text-[48px]">
+          Every song.<br>
+          <span class="bg-clip-text text-transparent" style="background-image:linear-gradient(90deg,#a78bfa 0%,#f472b6 38%,#22d3ee 100%)">Every source.</span><br>
+          <span class="font-300 text-white/90">One search.</span>
+        </h1>
+        <p class="mt-3 max-w-[640px] text-[14.5px] leading-6 text-white/60">Search once, get results from <span class="text-white/90 font-600">iTunes previews</span>, <span class="text-white/90 font-600">JioSaavn 320kbps</span> & <span class="text-white/90 font-600">YouTube Music</span> — with direct streams, artwork, and per-source diagnostics.</p>
+      </div>
+      <div class="lg:w-[360px] shrink-0">
+        <div class="glass-strong rounded-[20px] p-4">
+          <div class="flex items-center justify-between">
+            <div class="text-[11px] tracking-widest font-700 uppercase text-white/50">Try instantly</div>
+            <div class="text-[11px] font-mono text-white/40">Press <span class="px-1.5 py-0.5 rounded bg-white/10 border border-white/10 text-white/80">/</span></div>
+          </div>
+          <div class="mt-3 grid grid-cols-3 gap-2">
+            <button data-example="Arijit Singh" class="exampleBtn rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 px-2 py-2.5 text-xs font-600 leading-none transition text-center">Arijit Singh</button>
+            <button data-example="The Weeknd Blinding Lights" class="exampleBtn rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 px-2 py-2.5 text-xs font-600 leading-none transition">The Weeknd</button>
+            <button data-example="lofi hip hop" class="exampleBtn rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 px-2 py-2.5 text-xs font-600 leading-none transition">lofi hip hop</button>
+          </div>
+          <div class="mt-3 flex items-center gap-2 text-[11px] font-mono text-white/45">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+            <span id="statsLine">Ready — <span class="text-white/70">API v1.0.0</span> • CORS enabled</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search Card -->
+  <section class="glass-strong rounded-[24px] p-4 sm:p-5 lg:p-6 shadow-[0_20px_60px_rgba(0,0,0,.45)] relative overflow-hidden">
+    <div class="absolute inset-0 pointer-events-none opacity-[0.06]" style="background: radial-gradient(600px 200px at 20% 0%, rgba(167,139,250,.6), transparent 60%), radial-gradient(500px 220px at 90% 10%, rgba(236,72,153,.5), transparent 60%)"></div>
+    <div class="relative">
+      <!-- Search Row -->
+      <div class="flex flex-col lg:flex-row gap-3">
+        <div class="flex-1 relative group">
+          <div class="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-violet-300 transition">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          </div>
+          <input id="qInput" type="text" autocomplete="off" spellcheck="false" placeholder="Search for songs, artists, albums — e.g. ‘Kesariya’ or ‘Daft Punk’" class="w-full h-[50px] rounded-2xl bg-[#0B1022] border border-white/10 focus:border-violet-400/40 focus-ring pl-11 pr-[124px] text-[15px] font-500 placeholder:text-white/35 text-white transition">
+          <div class="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+            <span class="hidden sm:inline-flex items-center gap-1 rounded-full bg-white/10 border border-white/10 px-2 py-1 text-[11px] font-mono text-white/60"><span class="opacity-60">/</span> focus</span>
+            <button id="clearBtn" class="hidden h-8 w-8 grid place-items-center rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition text-white/60" title="Clear (Esc)">✕</button>
+          </div>
+        </div>
+        <button id="searchBtn" class="h-[50px] shrink-0 inline-flex items-center justify-center gap-2 rounded-2xl px-6 font-700 text-[14px] text-white shadow-lg transition active:scale-[0.98]" style="background:linear-gradient(135deg,#7c3aed 0%,#ec4899 52%,#06b6d4 100%); box-shadow:0 10px 22px rgba(124,58,237,.35)">
+          <svg id="searchIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <span id="searchLabel">Search</span>
+          <span id="searchSpin" class="hidden h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+        </button>
+      </div>
+
+      <!-- Controls Row -->
+      <div class="mt-4 flex flex-col lg:flex-row gap-4 lg:items-center justify-between">
+        <!-- Source toggles -->
+        <div class="flex-1 min-w-0">
+          <div class="text-[11px] tracking-widest font-700 uppercase text-white/45 mb-2 flex items-center gap-2">Sources <span class="font-mono normal-case tracking-normal text-white/30">• click to toggle, All = all 3</span></div>
+          <div class="flex flex-wrap gap-2" id="sourceToggles">
+            <button data-source="all" class="srcBtn active group inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-700 border transition" data-active="true">
+              <span class="h-2 w-2 rounded-full bg-white shadow"></span> All sources
+            </button>
+            <button data-source="itunes" class="srcBtn active inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-700 border transition" data-active="true">
+              <span class="h-2 w-2 rounded-full" style="background:#ff2d55"></span> iTunes
+              <span class="hidden sm:inline text-[10px] font-mono opacity-50">preview</span>
+            </button>
+            <button data-source="jiosaavn" class="srcBtn active inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-700 border transition" data-active="true">
+              <span class="h-2 w-2 rounded-full" style="background:#1db954"></span> JioSaavn
+              <span class="hidden sm:inline text-[10px] font-mono opacity-50">320kbps</span>
+            </button>
+            <button data-source="ytmusic" class="srcBtn active inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-700 border transition" data-active="true">
+              <span class="h-2 w-2 rounded-full" style="background:#ff0000"></span> YT Music
+              <span class="hidden sm:inline text-[10px] font-mono opacity-50">Innertube</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Limit -->
+        <div class="lg:w-[320px] shrink-0 glass rounded-2xl p-3 border border-white/10">
+          <div class="flex items-center justify-between">
+            <div class="text-[11px] tracking-widest font-700 uppercase text-white/45">Results limit</div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-mono text-white/50">1</span>
+              <span id="limitValue" class="min-w-[36px] text-center rounded-full bg-white text-ink font-800 text-xs px-2 py-1">10</span>
+              <span class="text-xs font-mono text-white/50">20</span>
+            </div>
+          </div>
+          <input id="limitSlider" type="range" min="1" max="20" value="10" class="range w-full mt-2">
+          <div class="mt-1 flex justify-between text-[10px] font-mono text-white/30">
+            <span>1 • conservative</span><span>20 • max</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div id="historyWrap" class="hidden mt-4">
+        <div class="flex items-center justify-between">
+          <div class="text-[11px] tracking-widest font-700 uppercase text-white/45">Recent searches</div>
+          <button id="clearHistory" class="text-[11px] font-600 text-white/50 hover:text-white transition">Clear</button>
+        </div>
+        <div id="historyChips" class="mt-2 flex flex-wrap gap-2"></div>
+      </div>
+
+      <!-- Meta / diagnostics -->
+      <div id="metaBar" class="hidden mt-4 rounded-2xl bg-[#0B1022] border border-white/10 px-4 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          <span id="metaSummary" class="font-600 text-white/80">—</span>
+          <span class="hidden sm:inline h-3 w-px bg-white/10"></span>
+          <span id="metaTook" class="font-mono text-white/50">—</span>
+          <span id="metaWarnings" class="hidden items-center gap-2"></span>
+        </div>
+        <div id="perSourcePills" class="flex flex-wrap gap-2"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section class="mt-6">
+    <div id="emptyState" class="glass rounded-[24px] p-8 sm:p-10 text-center">
+      <div class="mx-auto max-w-[640px]">
+        <div class="mx-auto h-14 w-14 rounded-2xl grid place-items-center text-xl" style="background:linear-gradient(135deg, rgba(167,139,250,.2), rgba(236,72,153,.2)); border:1px solid rgba(255,255,255,.12)">♫</div>
+        <h3 class="font-outfit font-700 text-[20px] mt-4">Discover across three worlds</h3>
+        <p class="mt-2 text-sm leading-6 text-white/55">Type a query and hit <span class="text-white font-600">Search</span> — we fan-out to iTunes, JioSaavn and YouTube Music in parallel, dedupe safely, and return streams you can play instantly. Try <button class="underline decoration-violet-400/40 underline-offset-4 hover:text-white" onclick="document.getElementById('qInput').value='Arijit Singh'; document.getElementById('qInput').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'}))">Arijit Singh</button>, <button class="underline decoration-pink-400/40 underline-offset-4 hover:text-white" onclick="document.getElementById('qInput').value='Blinding Lights'; document.getElementById('qInput').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'}))">Blinding Lights</button> or <button class="underline decoration-cyan-400/40 underline-offset-4 hover:text-white" onclick="document.getElementById('qInput').value='Kesariya'; document.getElementById('qInput').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter'}))">Kesariya</button>.</p>
+        <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
+          <div class="rounded-2xl bg-white/[0.04] border border-white/10 p-4">
+            <div class="text-xs font-700 tracking-widest uppercase text-violet-300">iTunes</div>
+            <div class="text-sm font-600 mt-1">30s previews, instant play</div>
+            <div class="text-xs text-white/50 mt-1">artwork 600×600, explicit flags</div>
+          </div>
+          <div class="rounded-2xl bg-white/[0.04] border border-white/10 p-4">
+            <div class="text-xs font-700 tracking-widest uppercase text-emerald-300">JioSaavn</div>
+            <div class="text-sm font-600 mt-1">12 → 320kbps ladder</div>
+            <div class="text-xs text-white/50 mt-1">DES-decrypted CDN URLs</div>
+          </div>
+          <div class="rounded-2xl bg-white/[0.04] border border-white/10 p-4">
+            <div class="text-xs font-700 tracking-widest uppercase text-red-300">YT Music</div>
+            <div class="text-sm font-600 mt-1">Innertube player resolves</div>
+            <div class="text-xs text-white/50 mt-1">via /stream?id= • adaptive</div>
+          </div>
+        </div>
+        <div class="mt-6 flex flex-wrap justify-center gap-2 text-[11px] font-mono">
+          <span class="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-white/60">GET /search?q=&amp;limit=&amp;sources=</span>
+          <span class="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-white/60">GET /stream?id=</span>
+          <span class="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-white/60">GET /health</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="loadingGrid" class="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <!-- skeletons injected -->
+    </div>
+
+    <div id="errorBar" class="hidden mt-4 rounded-2xl bg-red-500/10 border border-red-500/20 px-4 py-3 flex items-start gap-3">
+      <div class="h-8 w-8 rounded-xl bg-red-500/20 grid place-items-center shrink-0">⚠️</div>
+      <div class="min-w-0 flex-1">
+        <div class="text-sm font-700 text-red-200">Something went wrong</div>
+        <div id="errorText" class="text-xs leading-5 text-red-200/80 font-mono break-words"></div>
+      </div>
+      <button onclick="document.getElementById('errorBar').classList.add('hidden')" class="h-8 w-8 grid place-items-center rounded-xl bg-white/5 border border-white/10">✕</button>
+    </div>
+
+    <div id="resultsHeader" class="hidden mt-2 flex items-center justify-between gap-4">
+      <h2 class="font-outfit font-700 text-[13px] tracking-widest uppercase text-white/50">Results <span id="resultsCount" class="ml-2 font-mono normal-case tracking-normal text-white/80"></span></h2>
+      <div class="flex items-center gap-2">
+        <button id="shareBtn" class="hidden sm:inline-flex items-center gap-1.5 rounded-full glass px-3 py-1.5 text-xs font-600 hover:bg-white/10 transition">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          Share
+        </button>
+        <button id="copyCurlBtn" class="hidden sm:inline-flex items-center gap-1.5 rounded-full glass px-3 py-1.5 text-xs font-600 hover:bg-white/10 transition">curl</button>
+      </div>
+    </div>
+
+    <div id="resultsGrid" class="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+
+    <div id="noResults" class="hidden glass rounded-[20px] p-8 text-center mt-4">
+      <div class="text-2xl">∅</div>
+      <div class="font-700 mt-2">No results</div>
+      <div class="text-sm text-white/55 mt-1">Try a different spelling, fewer words, or switch sources to <span class="text-white">All</span>.</div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="mt-10 pt-6 border-t border-white/10 flex flex-col sm:flex-row gap-3 justify-between text-xs text-white/40">
+    <div class="font-mono">© SongLinks • Built on Express + linkedom + crypto-js • <a href="/api" class="underline decoration-white/20 hover:text-white">/api</a> • <a href="/health" class="underline decoration-white/20 hover:text-white">/health</a></div>
+    <div class="flex items-center gap-3">
+      <span class="hidden sm:inline">Keyboard:</span>
+      <span class="px-2 py-1 rounded-full bg-white/5 border border-white/10 font-mono text-white/60"><span class="text-white">/</span> search</span>
+      <span class="px-2 py-1 rounded-full bg-white/5 border border-white/10 font-mono text-white/60"><span class="text-white">Space</span> play</span>
+      <span class="px-2 py-1 rounded-full bg-white/5 border border-white/10 font-mono text-white/60"><span class="text-white">Esc</span> clear</span>
+    </div>
+  </footer>
+</main>
+
+<!-- Player -->
+<div id="playerBar" class="fixed inset-x-0 bottom-0 z-50 translate-y-[120%] transition-transform duration-500 ease-[cubic-bezier(.16,1,.3,1)]">
+  <div class="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 pb-4">
+    <div class="glass-strong rounded-[22px] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,.6)] border border-white/15">
+      <div class="h-1 w-full bg-white/10">
+        <div id="progressFill" class="h-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400 transition-all duration-150" style="width:0%"></div>
+      </div>
+      <div class="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
+        <div class="h-14 w-14 sm:h-[64px] sm:w-[64px] rounded-xl overflow-hidden bg-white/5 border border-white/10 shrink-0 relative">
+          <img id="pCover" alt="" class="h-full w-full object-cover">
+          <div id="pCoverFallback" class="absolute inset-0 grid place-items-center text-white/60 text-lg hidden">♪</div>
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 min-w-0">
+            <div id="pTitle" class="font-700 text-[14px] sm:text-[15px] leading-5 truncate">—</div>
+            <span id="pSource" class="hidden sm:inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-800 tracking-widest uppercase border"></span>
+          </div>
+          <div id="pArtist" class="text-xs sm:text-sm text-white/60 truncate">—</div>
+          <div class="mt-2 flex items-center gap-2">
+            <button id="pPrev" class="h-8 w-8 grid place-items-center rounded-full bg-white/10 hover:bg-white/15 border border-white/10 transition" title="Previous (Shift+P)">⏮</button>
+            <button id="pPlay" class="h-9 w-9 grid place-items-center rounded-full bg-white text-ink hover:bg-white/90 transition shrink-0" title="Play/Pause (Space)">
+              <svg id="pPlayIcon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v14l11-7z"/></svg>
+              <svg id="pPauseIcon" class="hidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+            </button>
+            <button id="pNext" class="h-8 w-8 grid place-items-center rounded-full bg-white/10 hover:bg-white/15 border border-white/10 transition" title="Next (Shift+N)">⏭</button>
+            <div class="hidden sm:flex items-center gap-1.5 ml-1">
+              <button id="pCopyStream" class="h-7 px-2.5 rounded-full glass text-[11px] font-600 hover:bg-white/10">Copy stream</button>
+              <button id="pOpenPage" class="h-7 px-2.5 rounded-full glass text-[11px] font-600 hover:bg-white/10">Open</button>
+            </div>
+            <div class="flex items-center gap-2 ml-auto">
+              <span id="pTime" class="font-mono text-[11px] text-white/60">0:00 / 0:00</span>
+              <div class="hidden lg:flex items-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                <input id="volSlider" type="range" min="0" max="100" value="88" class="range w-[90px]">
+              </div>
+              <select id="qualitySel" class="hidden h-7 rounded-full bg-white/10 border border-white/10 px-2 text-[11px] font-600 font-mono">
+              </select>
+              <button id="pClose" class="h-8 w-8 grid place-items-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10">✕</button>
+            </div>
+          </div>
+          <!-- Seek -->
+          <div class="mt-2 flex items-center gap-2">
+            <input id="seekSlider" type="range" min="0" max="1000" value="0" class="range flex-1">
+            <span id="pQualityHint" class="hidden sm:inline text-[10px] font-mono px-2 py-1 rounded-full bg-white/5 border border-white/10 text-white/60"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toastWrap" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] pointer-events-none flex flex-col gap-2 items-center"></div>
+
+<!-- Shortcuts Modal -->
+<div id="shortcutsModal" class="fixed inset-0 z-[70] hidden">
+  <div id="shortcutsBackdrop" class="absolute inset-0 bg-[#070A14]/70 backdrop-blur-sm"></div>
+  <div class="relative max-w-[560px] mx-auto mt-[10vh] glass-strong rounded-[20px] p-6 shadow-2xl border border-white/10">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <div class="font-outfit font-800 text-lg">Keyboard & Tips</div>
+        <div class="text-sm text-white/60 mt-1">Power-user shortcuts for lightning search.</div>
+      </div>
+      <button id="shortcutsClose" class="h-8 w-8 grid place-items-center rounded-full bg-white/10">✕</button>
+    </div>
+    <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+      <div class="rounded-xl bg-white/5 border border-white/10 p-3 flex justify-between items-center"><span>Focus search</span> <span class="font-mono px-2 py-1 rounded-full bg-white text-ink text-xs font-800">/</span></div>
+      <div class="rounded-xl bg-white/5 border border-white/10 p-3 flex justify-between items-center"><span>Search</span> <span class="font-mono px-2 py-1 rounded-full bg-white/10 border border-white/10 text-xs">Enter</span></div>
+      <div class="rounded-xl bg-white/5 border border-white/10 p-3 flex justify-between items-center"><span>Clear input</span> <span class="font-mono px-2 py-1 rounded-full bg-white/10 border border-white/10 text-xs">Esc</span></div>
+      <div class="rounded-xl bg-white/5 border border-white/10 p-3 flex justify-between items-center"><span>Play / Pause</span> <span class="font-mono px-2 py-1 rounded-full bg-white/10 border border-white/10 text-xs">Space</span></div>
+      <div class="rounded-xl bg-white/5 border border-white/10 p-3 flex justify-between items-center"><span>Next / Prev</span> <span class="font-mono px-2 py-1 rounded-full bg-white/10 border border-white/10 text-xs">Shift + N/P</span></div>
+      <div class="rounded-xl bg-white/5 border border-white/10 p-3 flex justify-between items-center"><span>Copy link</span> <span class="font-mono px-2 py-1 rounded-full bg-white/10 border border-white/10 text-xs">C</span></div>
+    </div>
+    <div class="mt-4 text-xs leading-5 text-white/45">Tip: <span class="text-white/75 font-600">All sources</span> merges 3 adapters in parallel. Use <span class="text-white/75">limit 20</span> for max discovery, or isolate <span class="text-white/75">JioSaavn 320kbps</span> for highest quality. YT Music tracks auto-resolve via <code class="px-1.5 py-0.5 rounded bg-white/10 border border-white/10 font-mono">/stream?id=</code>.</div>
+  </div>
+</div>
+
+<audio id="audio" preload="metadata" class="hidden"></audio>
+
+<script>
+(() => {
+  const $ = (s, r=document) => r.querySelector(s);
+  const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+  const audio = $('#audio');
+  const qInput = $('#qInput');
+  const searchBtn = $('#searchBtn');
+  const searchLabel = $('#searchLabel');
+  const searchIcon = $('#searchIcon');
+  const searchSpin = $('#searchSpin');
+  const clearBtn = $('#clearBtn');
+  const limitSlider = $('#limitSlider');
+  const limitValue = $('#limitValue');
+  const resultsGrid = $('#resultsGrid');
+  const loadingGrid = $('#loadingGrid');
+  const emptyState = $('#emptyState');
+  const errorBar = $('#errorBar');
+  const errorText = $('#errorText');
+  const resultsHeader = $('#resultsHeader');
+  const resultsCount = $('#resultsCount');
+  const noResults = $('#noResults');
+  const metaBar = $('#metaBar');
+  const metaSummary = $('#metaSummary');
+  const metaTook = $('#metaTook');
+  const perSourcePills = $('#perSourcePills');
+  const metaWarnings = $('#metaWarnings');
+  const historyWrap = $('#historyWrap');
+  const historyChips = $('#historyChips');
+  const healthDot = $('#healthDot');
+  const healthText = $('#healthText');
+  const healthUptime = $('#healthUptime');
+  const playerBar = $('#playerBar');
+  const pCover = $('#pCover');
+  const pCoverFallback = $('#pCoverFallback');
+  const pTitle = $('#pTitle');
+  const pArtist = $('#pArtist');
+  const pSource = $('#pSource');
+  const pTime = $('#pTime');
+  const pPlay = $('#pPlay');
+  const pPlayIcon = $('#pPlayIcon');
+  const pPauseIcon = $('#pPauseIcon');
+  const seekSlider = $('#seekSlider');
+  const progressFill = $('#progressFill');
+  const volSlider = $('#volSlider');
+  const qualitySel = $('#qualitySel');
+  const pQualityHint = $('#pQualityHint');
+
+  // State
+  let state = {
+    q: '',
+    sources: new Set(['itunes','jiosaavn','ytmusic']),
+    limit: 10,
+    results: [],
+    meta: null,
+    idx: -1,
+    history: [],
+    isSearching: false
+  };
+  try { state.history = JSON.parse(localStorage.getItem('sl_history')||'[]'); if(!Array.isArray(state.history)) state.history=[]; } catch { state.history=[]; }
+
+  // Helpers
+  const fmtDuration = (s) => {
+    if (!Number.isFinite(s) || s<=0) return '—';
+    s = Math.round(s);
+    if (s>=3600) { const h=Math.floor(s/3600), m=Math.floor((s%3600)/60); const sec=s%60; return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; }
+    const m=Math.floor(s/60), sec=s%60; return `${m}:${String(sec).padStart(2,'0')}`;
+  };
+  const fmtUptime = (sec) => {
+    sec=Math.floor(sec);
+    if (sec<60) return `${sec}s`;
+    if (sec<3600) return `${Math.floor(sec/60)}m ${sec%60}s`;
+    const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60); return `${h}h ${m}m`;
+  };
+  const sourceColor = (src) => ({itunes:'#ff2d55', jiosaavn:'#1db954', ytmusic:'#ff0000'}[src]||'#a78bfa');
+  const sourceLabel = (src) => ({itunes:'iTunes', jiosaavn:'JioSaavn', ytmusic:'YT Music'}[src]||src);
+  const sourceGradient = (src) => ({itunes:'from-[#ff2d55]/20 to-[#ff2d55]/5 border-[#ff2d55]/30 text-[#ff7a93]', jiosaavn:'from-emerald-500/20 to-emerald-500/5 border-emerald-500/30 text-emerald-300', ytmusic:'from-red-500/20 to-red-500/5 border-red-500/30 text-red-300'}[src]||'from-violet-500/20 to-violet-500/5 border-violet-500/30 text-violet-300');
+
+  function toast(msg, type='ok'){
+    const el=document.createElement('div');
+    el.className=`pointer-events-auto glass-strong rounded-full px-4 py-2.5 text-xs font-600 shadow-xl border flex items-center gap-2.5 translate-y-2 opacity-0 transition-all duration-300 ${type==='error'?'border-red-500/30 text-red-200':'border-white/15 text-white'}`
+    el.innerHTML=`<span class="h-2 w-2 rounded-full ${type==='error'?'bg-red-400':'bg-emerald-400'} shrink-0"></span><span class="max-w-[420px] truncate">${msg}</span>`;
+    $('#toastWrap').appendChild(el);
+    requestAnimationFrame(()=>{ el.style.transform='translateY(0)'; el.style.opacity='1'; });
+    setTimeout(()=>{ el.style.opacity='0'; el.style.transform='translateY(8px)'; setTimeout(()=>el.remove(),300)},2600);
+  }
+  function copy(text){
+    if (navigator.clipboard && window.isSecureContext){ navigator.clipboard.writeText(text).then(()=>toast('Copied to clipboard'),()=>fallback()); }
+    else fallback();
+    function fallback(){
+      const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy'); toast('Copied')}catch{toast('Copy failed','error')} ta.remove();
+    }
+  }
+
+  function getSourcesParam(){
+    if (state.sources.size===3 || state.sources.size===0) return 'all';
+    return [...state.sources].join(',');
+  }
+  function syncSourceButtons(){
+    const allActive = state.sources.size===3;
+    $$('.srcBtn').forEach(btn=>{
+      const src=btn.dataset.source;
+      let active=false;
+      if (src==='all') active=allActive;
+      else active=state.sources.has(src);
+      btn.dataset.active=active?'true':'false';
+      if (active){
+        btn.classList.add('bg-white','text-ink','border-white','shadow');
+        btn.classList.remove('bg-white/[0.06]','text-white/70','border-white/10','glass');
+        btn.style.boxShadow='0 4px 16px rgba(255,255,255,.12)';
+      } else {
+        btn.classList.remove('bg-white','text-ink','border-white','shadow');
+        btn.classList.add('glass','bg-white/[0.06]','text-white/70','border-white/10');
+        btn.style.boxShadow='';
+      }
+    });
+  }
+
+  function renderHistory(){
+    if (!state.history.length){ historyWrap.classList.add('hidden'); return; }
+    historyWrap.classList.remove('hidden');
+    historyChips.innerHTML='';
+    state.history.slice(0,8).forEach((q,i)=>{
+      const chip=document.createElement('button');
+      chip.className='group inline-flex items-center gap-2 rounded-full glass px-3 py-1.5 text-xs font-600 hover:bg-white/10 transition border border-white/10';
+      chip.innerHTML=`<span class="h-5 w-5 grid place-items-center rounded-full bg-white/10 group-hover:bg-white group-hover:text-ink transition">↻</span><span class="max-w-[160px] truncate">${q}</span><span class="ml-1 h-5 w-5 grid place-items-center rounded-full hover:bg-white/15" data-del="${i}">✕</span>`;
+      chip.addEventListener('click',(e)=>{
+        if (e.target.closest('[data-del]')){ e.stopPropagation(); state.history.splice(i,1); localStorage.setItem('sl_history', JSON.stringify(state.history)); renderHistory(); return; }
+        qInput.value=q; doSearch();
+      });
+      historyChips.appendChild(chip);
+    });
+  }
+  function pushHistory(q){
+    q=q.trim(); if(!q) return;
+    state.history = [q, ...state.history.filter(x=>x!==q)].slice(0,12);
+    localStorage.setItem('sl_history', JSON.stringify(state.history));
+    renderHistory();
+  }
+
+  function setLoading(on){
+    state.isSearching=on;
+    if(on){
+      searchLabel.textContent='Searching…';
+      searchIcon.classList.add('hidden');
+      searchSpin.classList.remove('hidden');
+      searchBtn.disabled=true; searchBtn.style.opacity='.9';
+      loadingGrid.classList.remove('hidden');
+      resultsGrid.innerHTML='';
+      emptyState.classList.add('hidden');
+      noResults.classList.add('hidden');
+      errorBar.classList.add('hidden');
+      resultsHeader.classList.add('hidden');
+      metaBar.classList.add('hidden');
+      loadingGrid.innerHTML='';
+      for(let i=0;i<6;i++){
+        const sk=document.createElement('div');
+        sk.className='glass rounded-[20px] p-4 overflow-hidden';
+        sk.innerHTML=`
+          <div class="aspect-square rounded-2xl shimmer-bg"></div>
+          <div class="mt-4 h-4 rounded-full shimmer-bg w-[75%]"></div>
+          <div class="mt-2 h-3 rounded-full shimmer-bg w-[55%]"></div>
+          <div class="mt-3 flex gap-2"><div class="h-8 flex-1 rounded-full shimmer-bg"></div><div class="h-8 w-20 rounded-full shimmer-bg"></div></div>
+        `;
+        loadingGrid.appendChild(sk);
+      }
+    } else {
+      searchLabel.textContent='Search';
+      searchIcon.classList.remove('hidden');
+      searchSpin.classList.add('hidden');
+      searchBtn.disabled=false; searchBtn.style.opacity='1';
+      loadingGrid.classList.add('hidden');
+    }
+  }
+
+  function showError(msg){
+    errorText.textContent=msg;
+    errorBar.classList.remove('hidden');
+    toast(msg,'error');
+  }
+
+  // Health polling
+  async function pollHealth(){
+    try{
+      const r=await fetch('/health', {headers:{'Accept':'application/json'}});
+      const j=await r.json();
+      if(j.ok){
+        healthDot.className='h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(16,185,129,.7)]';
+        healthDot.style.boxShadow='0 0 0 6px rgba(16,185,129,.15)';
+        healthText.textContent='operational';
+        healthText.className='font-mono text-[12px] text-emerald-300';
+        healthUptime.textContent='• ' + fmtUptime(j.uptime||0) + ' up';
+        healthUptime.className='hidden md:inline font-mono text-[11px] text-white/50';
+        $('#statsLine').innerHTML=`<span class="text-emerald-300 font-700">● live</span> • ${fmtUptime(j.uptime||0)} up • <span class="text-white/70">${new Date(j.time).toLocaleTimeString()}</span>`;
+      } else throw new Error('not ok');
+    } catch(e){
+      healthDot.className='h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_12px_rgba(239,68,68,.7)]';
+      healthText.textContent='unreachable';
+      healthText.className='font-mono text-[12px] text-red-300';
+      healthUptime.textContent='• retrying…';
+    }
+  }
+
+  // Results rendering
+  function renderMeta(meta){
+    if(!meta){ metaBar.classList.add('hidden'); return; }
+    metaBar.classList.remove('hidden');
+    metaSummary.textContent = `${meta.totalResults} results for “${meta.query}”`;
+    metaTook.textContent = `• ${meta.tookMs}ms • limit ${meta.limit} • sources: ${meta.sources.join(', ')}`;
+    perSourcePills.innerHTML='';
+    (meta.perSource||[]).forEach(ps=>{
+      const pill=document.createElement('div');
+      const ok=ps.ok;
+      pill.className=`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-700 border ${ok?'bg-white/5 border-white/10 text-white/75':'bg-red-500/10 border-red-500/20 text-red-300'}`;
+      pill.innerHTML=`<span class="h-1.5 w-1.5 rounded-full ${ok?'bg-emerald-400':'bg-red-400'}"></span>${sourceLabel(ps.source)} <span class="font-mono opacity-60">${ps.count} • ${ps.tookMs}ms</span>`;
+      if(!ok) pill.title=ps.error||'error';
+      perSourcePills.appendChild(pill);
+    });
+    if(meta.warnings && meta.warnings.length){
+      metaWarnings.classList.remove('hidden'); metaWarnings.classList.add('flex');
+      metaWarnings.innerHTML = meta.warnings.map(w=>`<span class="inline-flex items-center rounded-full bg-amber-500/15 border border-amber-500/25 px-2 py-1 text-[10px] font-mono text-amber-200">${w.source}: ${String(w.error).slice(0,80)}</span>`).join('');
+    } else metaWarnings.classList.add('hidden');
+  }
+
+  function createCard(r, idx){
+    const title = r.title || 'Untitled';
+    const artist = r.artist || 'Unknown artist';
+    const album = r.album || r.language || r.genre || '';
+    const duration = fmtDuration(r.duration);
+    const cover = r.cover || '';
+    const page = r.page || '';
+    const explicit = r.extra && r.extra.isExplicit;
+    const dolby = r.extra && r.extra.isDolby;
+    const hasStreams = Array.isArray(r.streams) && r.streams.length>0;
+    const streamCount = hasStreams ? r.streams.length : 0;
+    const primaryStream = hasStreams ? r.streams[0] : null;
+    const isYt = r.source==='ytmusic' || (r.sources && r.sources.includes('ytmusic'));
+    const srcs = r.sources || [r.source];
+    const mainSrc = srcs[0] || r.source;
+
+    const card=document.createElement('div');
+    card.className='group glass rounded-[20px] overflow-hidden card-hover flex flex-col p-3 sm:p-3.5 animate-in';
+    card.style.animationDelay=`${idx*28}ms`;
+    card.innerHTML=`
+      <div class="relative aspect-square rounded-2xl overflow-hidden bg-[#0B1022] border border-white/10">
+        ${cover?`<img src="${cover}" alt="" loading="lazy" class="h-full w-full object-cover group-hover:scale-[1.04] transition duration-500">`:`<div class="h-full w-full grid place-items-center" style="background: radial-gradient(480px 300px at 30% 20%, rgba(167,139,250,.35), transparent 60%), radial-gradient(420px 280px at 80% 90%, rgba(236,72,153,.30), transparent 60%), linear-gradient(135deg,#12162a, #0f1323)"><span class="text-4xl opacity-40">♫</span></div>`}
+        <div class="absolute top-2 left-2 flex flex-wrap gap-1.5 max-w-[78%]">
+          ${srcs.map(s=>`<span class="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-800 tracking-widest uppercase border bg-gradient-to-br ${sourceGradient(s)} backdrop-blur-md"><span class="h-1.5 w-1.5 rounded-full" style="background:${sourceColor(s)}"></span>${sourceLabel(s)}</span>`).join('')}
+        </div>
+        <div class="absolute top-2 right-2 flex flex-col items-end gap-1">
+          ${explicit?`<span class="rounded-full bg-white text-ink px-2 py-1 text-[10px] font-800 tracking-widest">EXPLICIT</span>`:''}
+          ${dolby?`<span class="rounded-full bg-violet-500 text-white px-2 py-1 text-[10px] font-800 tracking-widest">DOLBY</span>`:''}
+          <span class="rounded-full bg-black/60 backdrop-blur px-2 py-1 text-[11px] font-mono font-600 border border-white/10">${duration}</span>
+        </div>
+        <button data-play="${idx}" class="absolute inset-0 grid place-items-center opacity-0 group-hover:opacity-100 transition bg-gradient-to-t from-black/70 via-black/10 to-transparent">
+          <span class="h-14 w-14 rounded-full bg-white text-ink grid place-items-center shadow-xl translate-y-2 group-hover:translate-y-0 transition">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v14l11-7z"/></svg>
+          </span>
+        </button>
+        ${hasStreams?`<div class="absolute bottom-2 left-2 rounded-full bg-black/55 backdrop-blur border border-white/10 px-2.5 py-1 text-[11px] font-mono text-white/80">${streamCount} stream${streamCount>1?'s':''} • ${primaryStream.quality||'audio'}</div>`:`<div class="absolute bottom-2 left-2 rounded-full bg-amber-500/15 border border-amber-500/25 px-2.5 py-1 text-[11px] font-700 text-amber-200">needs resolve</div>`}
+      </div>
+      <div class="pt-3 flex-1 min-w-0 flex flex-col">
+        <div class="font-700 leading-5 text-[14.5px] line-clamp-2" title="${title.replace(/"/g,'&quot;')}">${title}</div>
+        <div class="text-[13px] text-white/60 truncate mt-0.5" title="${artist.replace(/"/g,'&quot;')}">${artist}</div>
+        ${album?`<div class="text-[12px] text-white/40 truncate mt-1 flex items-center gap-1.5"><span class="h-1 w-1 rounded-full bg-white/30"></span>${album}</div>`:''}
+        ${r.playCount?`<div class="text-[11px] font-mono text-white/35 mt-1">${Number(r.playCount).toLocaleString()} plays</div>`:''}
+        <div class="mt-3 grid grid-cols-3 gap-2">
+          <button data-play="${idx}" class="col-span-1 inline-flex items-center justify-center gap-1.5 rounded-full h-9 font-700 text-xs text-white" style="background:linear-gradient(135deg,#7c3aed,#ec4899)">${hasStreams?'Play':'Resolve'}</button>
+          <button data-copy-page="${idx}" class="inline-flex items-center justify-center rounded-full h-9 glass text-xs font-600 hover:bg-white/10">Copy</button>
+          <a href="${page||'#'}" target="_blank" rel="noopener" data-open="${idx}" class="inline-flex items-center justify-center rounded-full h-9 glass text-xs font-600 hover:bg-white/10 ${page?'':'pointer-events-none opacity-40'}">Open</a>
+        </div>
+        <div class="mt-2.5 flex flex-wrap gap-1.5">
+          <button data-copy-stream="${idx}" class="text-[11px] font-mono px-2.5 py-1 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-white/60 ${hasStreams?'':'hidden'}">copy stream</button>
+          <span class="text-[11px] font-mono px-2.5 py-1 rounded-full bg-white/[0.03] border border-white/5 text-white/30">id:${String(r.id).slice(0,18)}</span>
+        </div>
+      </div>
+    `;
+
+    // attach image fallback
+    const img=card.querySelector('img');
+    if(img){ img.addEventListener('error',()=>{ img.style.display='none'; }); }
+
+    // play handling via delegation still works but we enhance
+    return card;
+  }
+
+  function renderResults(data){
+    state.results=data.results||[];
+    state.meta=data;
+    renderMeta(data);
+    resultsGrid.innerHTML='';
+    if(!state.results.length){
+      noResults.classList.remove('hidden');
+      resultsHeader.classList.add('hidden');
+      emptyState.classList.add('hidden');
+      return;
+    }
+    noResults.classList.add('hidden');
+    emptyState.classList.add('hidden');
+    resultsHeader.classList.remove('hidden');
+    resultsCount.textContent=`• ${state.results.length} tracks • ${data.sources.join(', ')} • ${data.tookMs}ms`;
+    $('#shareBtn').classList.remove('hidden');
+    $('#copyCurlBtn').classList.remove('hidden');
+    state.results.forEach((r,i)=>{
+      const el=createCard(r,i);
+      resultsGrid.appendChild(el);
+    });
+    // update url
+    const url=new URL(location.href);
+    url.searchParams.set('q', data.query);
+    url.searchParams.set('limit', String(data.limit));
+    url.searchParams.set('sources', (data.sources||[]).join(','));
+    history.replaceState(null,'',url.toString());
+  }
+
+  // Search
+  async function doSearch(){
+    const q=(qInput.value||'').trim();
+    if(!q){ qInput.focus(); toast('Enter a search query','error'); qInput.classList.add('border-red-500/40'); setTimeout(()=>qInput.classList.remove('border-red-500/40'),900); return; }
+    state.q=q;
+    const limit=parseInt(limitSlider.value,10)||10;
+    const sourcesParam=getSourcesParam();
+    setLoading(true);
+    errorBar.classList.add('hidden');
+    try{
+      const url=`/search?q=${encodeURIComponent(q)}&limit=${limit}&sources=${encodeURIComponent(sourcesParam)}`;
+      const res=await fetch(url, {headers:{'Accept':'application/json'}});
+      const json=await res.json();
+      if(!res.ok || !json.ok) throw new Error(json.error||`HTTP ${res.status}`);
+      renderResults(json);
+      pushHistory(q);
+      if(json.totalResults===0) toast('No results — try another source or term');
+      else toast(`Found ${json.totalResults} tracks in ${json.tookMs}ms`);
+    } catch(e){
+      const msg=e.message||String(e);
+      showError(msg);
+      resultsGrid.innerHTML='';
+      metaBar.classList.add('hidden');
+    } finally { setLoading(false); }
+  }
+
+  // Events
+  searchBtn.addEventListener('click', doSearch);
+  qInput.addEventListener('keydown',(e)=>{
+    if(e.key==='Enter'){ doSearch(); }
+    if(e.key==='Escape'){ qInput.value=''; clearBtn.classList.add('hidden'); qInput.focus(); }
+  });
+  qInput.addEventListener('input',()=>{
+    if(qInput.value.trim()) clearBtn.classList.remove('hidden'); else clearBtn.classList.add('hidden');
+  });
+  clearBtn.addEventListener('click',()=>{ qInput.value=''; clearBtn.classList.add('hidden'); qInput.focus(); resultsGrid.innerHTML=''; emptyState.classList.remove('hidden'); resultsHeader.classList.add('hidden'); metaBar.classList.add('hidden'); noResults.classList.add('hidden'); history.replaceState(null,'',location.pathname); });
+  limitSlider.addEventListener('input',()=>{ limitValue.textContent=limitSlider.value; state.limit=parseInt(limitSlider.value,10); });
+  $$('.srcBtn').forEach(btn=> btn.addEventListener('click',()=>{
+    const src=btn.dataset.source;
+    if(src==='all'){
+      if(state.sources.size===3) state.sources.clear();
+      else state.sources=new Set(['itunes','jiosaavn','ytmusic']);
+    } else {
+      if(state.sources.has(src)) state.sources.delete(src);
+      else state.sources.add(src);
+      if(state.sources.size===0) state.sources.add(src);
+    }
+    syncSourceButtons();
+  }));
+  $$('.exampleBtn').forEach(b=> b.addEventListener('click',()=>{ qInput.value=b.dataset.example; doSearch(); }));
+  $('#clearHistory').addEventListener('click',()=>{ state.history=[]; localStorage.removeItem('sl_history'); renderHistory(); toast('History cleared'); });
+  $('#shareBtn').addEventListener('click',()=>{
+    const url=location.href;
+    copy(url);
+  });
+  $('#copyCurlBtn').addEventListener('click',()=>{
+    const q=state.meta?.query||qInput.value.trim()||'test';
+    const lim=state.meta?.limit||state.limit;
+    const src=(state.meta?.sources||[...state.sources]).join(',')||'all';
+    const curl=`curl "${location.origin}/search?q=${encodeURIComponent(q)}&limit=${lim}&sources=${encodeURIComponent(src)}"`;
+    copy(curl);
+  });
+
+  // Delegate grid actions
+  resultsGrid.addEventListener('click', async (e)=>{
+    const playBtn=e.target.closest('[data-play]');
+    const copyPage=e.target.closest('[data-copy-page]');
+    const copyStream=e.target.closest('[data-copy-stream]');
+    if(playBtn){
+      const idx=parseInt(playBtn.dataset.play,10);
+      playIndex(idx);
+    } else if(copyPage){
+      const idx=parseInt(copyPage.dataset.copyPage,10);
+      const r=state.results[idx];
+      if(r?.page) copy(r.page); else toast('No page link','error');
+    } else if(copyStream){
+      const idx=parseInt(copyStream.dataset.copyStream,10);
+      const r=state.results[idx];
+      if(r?.streams?.[0]?.url) copy(r.streams[0].url); else toast('No stream URL','error');
+    }
+  });
+
+  // Player logic
+  let currentFormats=[]; // for quality switching
+  function showPlayer(){
+    playerBar.classList.remove('translate-y-[120%]');
+    playerBar.classList.add('translate-y-0');
+  }
+  function hidePlayer(){
+    playerBar.classList.add('translate-y-[120%]');
+    playerBar.classList.remove('translate-y-0');
+  }
+  function setPlayIcon(isPlaying){
+    if(isPlaying){ pPlayIcon.classList.add('hidden'); pPauseIcon.classList.remove('hidden'); }
+    else { pPlayIcon.classList.remove('hidden'); pPauseIcon.classList.add('hidden'); }
+  }
+
+  async function playIndex(idx){
+    if(idx<0||idx>=state.results.length) return;
+    state.idx=idx;
+    const r=state.results[idx];
+    // UI
+    pTitle.textContent=r.title||'Untitled';
+    pArtist.textContent=r.artist||'Unknown';
+    const mainSrc=(r.sources?.[0]||r.source);
+    pSource.textContent=sourceLabel(mainSrc);
+    pSource.className=`hidden sm:inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-800 tracking-widest uppercase border bg-gradient-to-br ${sourceGradient(mainSrc)}`;
+    if(r.cover){ pCover.src=r.cover; pCover.classList.remove('hidden'); pCoverFallback.classList.add('hidden'); pCover.onerror=()=>{ pCover.classList.add('hidden'); pCoverFallback.classList.remove('hidden'); } } else { pCover.classList.add('hidden'); pCoverFallback.classList.remove('hidden'); }
+    showPlayer();
+    // Determine streams
+    if(r.streams && r.streams.length){
+      // jiosaavn / itunes direct
+      currentFormats=r.streams.map(s=>({quality:s.quality||s.bitrate||'audio', url:s.url, type:s.type||'audio'}));
+      setupQuality();
+      // pick highest for jiosaavn (last in ladder is best) else first
+      let url='';
+      let qHint='';
+      if(mainSrc==='jiosaavn' || r.source==='jiosaavn'){
+        // prefer 320kbps if exists
+        const pref=currentFormats.find(f=>String(f.quality).includes('320'))||currentFormats[currentFormats.length-1]||currentFormats[0];
+        url=pref.url; qHint=pref.quality;
+      } else {
+        url=currentFormats[0].url; qHint=currentFormats[0].quality;
+      }
+      pQualityHint.textContent=qHint?`▶ ${qHint}`:'';
+      pQualityHint.classList.remove('hidden');
+      audio.src=url;
+      audio.play().then(()=>setPlayIcon(true)).catch(e=>{ toast('Playback blocked: '+e.message,'error'); });
+      toast(`Playing: ${r.title} — ${r.artist}`);
+    } else if(r.source==='ytmusic' || (r.sources&&r.sources.includes('ytmusic')) || mainSrc==='ytmusic'){
+      // need to resolve via /stream
+      pQualityHint.textContent='resolving…';
+      pQualityHint.classList.remove('hidden');
+      qualitySel.classList.add('hidden');
+      audio.pause(); audio.src='';
+      setPlayIcon(false);
+      toast('Resolving YouTube stream…');
+      try{
+        const res=await fetch(`/stream?id=${encodeURIComponent(r.id)}`, {headers:{'Accept':'application/json'}});
+        const j=await res.json();
+        if(!res.ok || !j.ok) throw new Error(j.error||`HTTP ${res.status}`);
+        const fmts=j.formats||[];
+        if(!fmts.length) throw new Error('No formats returned');
+        // Prefer mp4 (aac) for universal browser support (Safari no opus), fallback to webm opus if no mp4
+        let sorted=[...fmts].sort((a,b)=>{
+          const aIsMp4 = String(a.type||'').includes('mp4') ? 0 : 1;
+          const bIsMp4 = String(b.type||'').includes('mp4') ? 0 : 1;
+          if(aIsMp4!==bIsMp4) return aIsMp4-bIsMp4;
+          const qa=parseInt(String(a.quality).replace(/\D/g,''),10)||a.bitrate||0;
+          const qb=parseInt(String(b.quality).replace(/\D/g,''),10)||b.bitrate||0;
+          return qb-qa;
+        });
+        // For YT, use proxied videoplayback via /proxy (adds Referer/Origin/Range, handles 403, caps at 1M ~60s @131kbps)
+        // Full YT >60s needs ytdl/poToken (currently ytdl fails: Could not extract functions) — use jiosaavn for full length
+        currentFormats=sorted.map(f=>({quality:f.quality||'audio', url:`/proxy?url=${encodeURIComponent(f.url)}`, origUrl:f.url, type:f.type||'audio'}));
+        setupQuality();
+        let best=currentFormats.find(f=>String(f.type).includes('mp4')) || currentFormats[0];
+        audio.src=best.url;
+        pQualityHint.textContent=`▶ ${best.quality} (proxied 1M)`;
+        try { await audio.play(); setPlayIcon(true); toast(`YT: ${best.quality} — 1M cap`); }
+        catch(e){ throw new Error(`Playback failed: ${e.message}`); }
+      } catch(e){
+        const msg=e.message||String(e);
+        toast('YT resolve failed: '+msg,'error');
+        showError('Stream resolve failed for '+r.id+': '+msg);
+        pQualityHint.textContent='resolve failed';
+      }
+    } else {
+      toast('No playable streams','error');
+    }
+    // update page handlers
+    $('#pCopyStream').onclick=()=>{
+      const u=audio.src||currentFormats[0]?.url;
+      if(u) copy(u); else toast('No stream yet','error');
+    };
+    $('#pOpenPage').onclick=()=>{
+      if(r.page) window.open(r.page,'_blank'); else toast('No page','error');
+    };
+  }
+
+  function setupQuality(){
+    if(!currentFormats.length){ qualitySel.classList.add('hidden'); return; }
+    // only show if >1 and distinct qualities
+    const uniq=[...new Set(currentFormats.map(f=>f.quality))];
+    if(uniq.length<=1){ qualitySel.classList.add('hidden'); return; }
+    qualitySel.innerHTML='';
+    currentFormats.forEach((f,i)=>{
+      const opt=document.createElement('option');
+      opt.value=String(i);
+      opt.textContent=`${f.quality} • ${f.type}`;
+      qualitySel.appendChild(opt);
+    });
+    qualitySel.classList.remove('hidden');
+    qualitySel.onchange=()=>{
+      const idx=parseInt(qualitySel.value,10);
+      const f=currentFormats[idx];
+      if(!f) return;
+      const wasPlaying=!audio.paused;
+      const t=audio.currentTime;
+      audio.src=f.url;
+      pQualityHint.textContent=`▶ ${f.quality}`;
+      audio.currentTime=t;
+      if(wasPlaying) audio.play().catch(()=>{});
+      toast(`Switched to ${f.quality}`);
+    };
+  }
+
+  // Player controls
+  pPlay.addEventListener('click',()=>{
+    if(!audio.src){ toast('No track','error'); return; }
+    if(audio.paused){ audio.play().then(()=>setPlayIcon(true)); } else { audio.pause(); setPlayIcon(false); }
+  });
+  audio.addEventListener('play',()=>setPlayIcon(true));
+  audio.addEventListener('pause',()=>setPlayIcon(false));
+  audio.addEventListener('timeupdate',()=>{
+    if(!audio.duration) return;
+    const pct=(audio.currentTime/audio.duration)*100;
+    progressFill.style.width=pct+'%';
+    seekSlider.value=String(Math.round((audio.currentTime/audio.duration)*1000));
+    pTime.textContent=`${fmtDuration(audio.currentTime)} / ${fmtDuration(audio.duration)}`;
+  });
+  audio.addEventListener('loadedmetadata',()=>{
+    pTime.textContent=`${fmtDuration(audio.currentTime)} / ${fmtDuration(audio.duration)}`;
+  });
+  audio.addEventListener('ended',()=>{
+    setPlayIcon(false);
+    // auto next
+    if(state.idx+1<state.results.length){ playIndex(state.idx+1); } else toast('Queue ended');
+  });
+  seekSlider.addEventListener('input',()=>{
+    if(!audio.duration) return;
+    const pct=parseInt(seekSlider.value,10)/1000;
+    audio.currentTime=pct*audio.duration;
+  });
+  volSlider.addEventListener('input',()=>{ audio.volume=parseInt(volSlider.value,10)/100; });
+  $('#pPrev').addEventListener('click',()=>{ if(state.idx>0) playIndex(state.idx-1); else toast('No previous'); });
+  $('#pNext').addEventListener('click',()=>{ if(state.idx+1<state.results.length) playIndex(state.idx+1); else toast('No next'); });
+  $('#pClose').addEventListener('click',()=>{ audio.pause(); hidePlayer(); setPlayIcon(false); });
+  audio.volume=0.88;
+
+  // Shortcuts modal
+  const shortcutsModal=$('#shortcutsModal');
+  const openShortcuts=()=>shortcutsModal.classList.remove('hidden');
+  const closeShortcuts=()=>shortcutsModal.classList.add('hidden');
+  $('#shortcutsBtn').addEventListener('click',openShortcuts);
+  $('#shortcutsClose').addEventListener('click',closeShortcuts);
+  $('#shortcutsBackdrop').addEventListener('click',closeShortcuts);
+
+  // Global keyboard
+  document.addEventListener('keydown',(e)=>{
+    const tag=(document.activeElement?.tagName||'').toLowerCase();
+    const isTyping=tag==='input' || tag==='textarea' || document.activeElement?.isContentEditable;
+    if(e.key==='/' && !isTyping){ e.preventDefault(); qInput.focus(); qInput.select(); }
+    if(e.key==='k' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); qInput.focus(); }
+    if(e.key==='Escape' && isTyping && document.activeElement===qInput){ qInput.value=''; clearBtn.classList.add('hidden'); }
+    else if(e.key==='Escape' && !isTyping){ closeShortcuts(); if(!playerBar.classList.contains('translate-y-[120%]')){ /* keep */ } }
+    if(e.code==='Space' && !isTyping){
+      e.preventDefault();
+      if(!audio.src && state.results.length) playIndex(0);
+      else if(audio.src) pPlay.click();
+    }
+    if(e.key==='c' && !isTyping && !e.ctrlKey && !e.metaKey){
+      const r=state.results[state.idx];
+      if(r?.page) copy(r.page);
+    }
+    if(e.key==='n' && e.shiftKey){ if(state.idx+1<state.results.length) playIndex(state.idx+1); }
+    if(e.key==='p' && e.shiftKey){ if(state.idx>0) playIndex(state.idx-1); }
+    if(e.key==='?' && e.shiftKey){ openShortcuts(); }
+  });
+
+  // Init
+  syncSourceButtons();
+  renderHistory();
+  limitValue.textContent=limitSlider.value;
+  pollHealth(); setInterval(pollHealth,30000);
+
+  // URL params on load
+  (()=>{ const u=new URL(location.href); const q=u.searchParams.get('q'); const lim=u.searchParams.get('limit'); const src=u.searchParams.get('sources'); if(lim){ const v=parseInt(lim,10); if(Number.isFinite(v)){ limitSlider.value=String(Math.min(20,Math.max(1,v))); limitValue.textContent=limitSlider.value; state.limit=v; }} if(src){ const parts=src.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean); if(parts.includes('all')) state.sources=new Set(['itunes','jiosaavn','ytmusic']); else { const valid=parts.filter(s=>['itunes','jiosaavn','ytmusic'].includes(s)); if(valid.length) state.sources=new Set(valid); } syncSourceButtons(); } if(q){ qInput.value=q; clearBtn.classList.remove('hidden'); doSearch(); } else { qInput.focus(); } })();
+
+  // expose for console
+  window.SongLinks={ doSearch, playIndex, state, pollHealth };
+
+  // Handle audio errors — try fallback to alternative type and proxy
+  let audioErrorRetried=false;
+  audio.addEventListener('error',()=>{
+    const err=audio.error;
+    const code=err?err.code:'unknown';
+    const msg=err?err.message:'';
+    console.warn('audio error',code,msg,audio.src?.slice(0,120));
+    // if was direct googlevideo and failed, try proxy
+    if(!audioErrorRetried && audio.src && audio.src.includes('googlevideo.com') && !audio.src.includes('/proxy?')){
+      audioErrorRetried=true;
+      const proxied=`/proxy?url=${encodeURIComponent(audio.src)}`;
+      toast(`Audio error ${code} — retrying via proxy…`, 'error');
+      pQualityHint.textContent='retrying via proxy…';
+      audio.src=proxied;
+      audio.play().then(()=>{ setPlayIcon(true); toast('Proxy retry ok'); }).catch(()=>{ toast(`Audio error ${code} — stream may be expired. Re-resolve.`,'error'); pQualityHint.textContent='error — try another quality or re-resolve'; });
+      return;
+    }
+    // if webm failed and mp4 available, try mp4
+    if(!audioErrorRetried && currentFormats.length>1){
+      const isWebm = String(audio.src).includes('mime=audio%2Fwebm') || String(currentFormats[0]?.type).includes('webm');
+      if(isWebm){
+        const mp4=currentFormats.find(f=>String(f.type).includes('mp4'));
+        if(mp4 && mp4.url!==audio.src){
+          audioErrorRetried=true;
+          toast(`Audio error ${code} — retrying ${mp4.quality} mp4…`, 'error');
+          audio.src=mp4.url;
+          audio.play().catch(()=>{});
+          return;
+        }
+      }
+    }
+    toast(`Audio error code ${code} — stream may be expired. Re-resolve.`, 'error');
+    pQualityHint.textContent='error — try another quality';
+    // reset flag after 2s to allow re-resolve
+    setTimeout(()=>audioErrorRetried=false,2000);
+  });
+  // reset retry flag on successful play
+  audio.addEventListener('playing',()=>{ audioErrorRetried=false; });
+
+  // Respect prefers-reduced-motion
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    document.documentElement.style.setProperty('--tw-animate-duration','0s');
+  }
+})();
+</script>
+</body>
+</html>

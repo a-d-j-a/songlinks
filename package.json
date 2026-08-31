@@ -1,19 +1,21 @@
 {
-  "name": "songlinks-api",
+  "name": "song-links-api",
   "version": "1.0.0",
-  "description": "SongLinks music aggregator API backend",
+  "description": "Express API that searches multiple free music sources and aggregates song/stream links",
   "main": "src/api.js",
   "scripts": {
-    "start": "node src/api.js",
-    "dev": "node --watch src/api.js"
+    "start": "node src/api.js"
   },
   "dependencies": {
-    "cors": "^2.8.5",
+    "@distube/ytdl-core": "^4.16.12",
+    "bgutils-js": "^4.0.3",
+    "cors": "^2.8.6",
     "crypto-js": "^4.2.0",
-    "express": "^4.18.2"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "license": "MIT"
+    "express": "^5.2.1",
+    "linkedom": "^0.18.13",
+    "play-dl": "^1.9.7",
+    "youtubei.js": "^18.0.0",
+    "yt-dlp-exec": "^1.0.2",
+    "ytdl-core": "^4.11.5"
+  }
 }
